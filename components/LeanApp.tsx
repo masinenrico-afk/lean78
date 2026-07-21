@@ -41,6 +41,7 @@ export default function LeanApp() {
   const [now, setNow] = useState(Date.now());
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
   const [importPreview, setImportPreview] = useState<ReturnType<typeof previewBackup>>(null);
+  const [finishArmed, setFinishArmed] = useState(false);
   const importPayload = useRef<LeanBackup | null>(null);
 
   useEffect(() => {
@@ -81,6 +82,12 @@ export default function LeanApp() {
     putItem("timers", expired);
     notifyTimerDone(timer.exercise);
   }, [timer, timerRemaining]);
+
+  useEffect(() => {
+    if (!finishArmed) return;
+    const timeout = window.setTimeout(() => setFinishArmed(false), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [finishArmed]);
 
   async function refresh() {
     const [storedTemplates, storedHistory, storedSettings, storedCoach] = await Promise.all([
@@ -134,6 +141,31 @@ export default function LeanApp() {
     setTab("coach");
   }
 
+  async function requestFinishWorkout() {
+    if (!activeWorkout || completedSetCount(activeWorkout) === 0) return;
+    const totalSets = activeWorkout.exercises.flatMap((exercise) => exercise.sets).length;
+    if (completedSetCount(activeWorkout) < totalSets && !finishArmed) {
+      setFinishArmed(true);
+      return;
+    }
+    setFinishArmed(false);
+    await finishWorkout();
+  }
+
+  async function reopenWorkout(workout: WorkoutSession) {
+    const session = structuredClone(workout);
+    session.completedAt = undefined;
+    session.durationSeconds = undefined;
+    session.coachSummary = undefined;
+    session.victories = undefined;
+    setFinishArmed(false);
+    await closeTimer();
+    setActiveWorkout(session);
+    setSelectedTemplateId(session.templateId);
+    await putItem<ActiveWorkoutRecord>("appState", { id: "activeWorkout", session });
+    setTab("workout");
+  }
+
   async function completeSet(exerciseIndex: number, setIndex: number) {
     if (!activeWorkout) return;
     const session = structuredClone(activeWorkout);
@@ -141,6 +173,7 @@ export default function LeanApp() {
     const set = exercise.sets[setIndex];
     set.completed = !set.completed;
     set.completedAt = set.completed ? new Date().toISOString() : undefined;
+    setFinishArmed(false);
     await persistActive(session);
     if (set.completed) await startRestTimer(exercise.name, REST_SECONDS[EXERCISES[exercise.name].kind]);
   }
@@ -152,6 +185,7 @@ export default function LeanApp() {
     const session = structuredClone(activeWorkout);
     session.exercises[exerciseIndex].sets[setIndex][field] = parsed;
     if (field === "weight") session.exercises[exerciseIndex].plannedWeight = parsed;
+    setFinishArmed(false);
     setActiveWorkout(session);
   }
 
@@ -275,15 +309,16 @@ export default function LeanApp() {
         </div>
       </header>
 
-      <div className="flex-1 px-5 pb-40 pt-5">
+      <div className={`flex-1 px-5 pt-5 ${activeWorkout && timer ? "pb-64" : "pb-40"}`}>
         {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} onStart={startWorkout} onResume={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
-        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} timer={timer} timerRemaining={timerRemaining} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={startWorkout} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onFinish={finishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} onToggleTimer={toggleTimer} onAdjustTimer={adjustTimer} onCloseTimer={closeTimer} />}
-        {tab === "history" && <HistoryScreen history={history} />}
+        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={startWorkout} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
+        {tab === "history" && <HistoryScreen history={history} onReopen={reopenWorkout} />}
         {tab === "progress" && <ProgressScreen history={history} records={records} stats={stats} />}
         {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} />}
         {tab === "settings" && <SettingsScreen settings={settings} importPreview={importPreview} history={history} onSettings={updateSettings} onBackup={downloadBackup} onImportFile={onImportFile} onConfirmImport={confirmImport} onCancelImport={() => setImportPreview(null)} />}
       </div>
 
+      {activeWorkout && timer && <FixedTimerBadge timer={timer} remaining={timerRemaining} onToggle={toggleTimer} onAdjust={adjustTimer} onClose={closeTimer} />}
       <BottomNav active={tab} setActive={setTab} />
     </main>
   );
@@ -339,7 +374,7 @@ function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expre
 }
 
 function WorkoutScreen(props: any) {
-  const { activeWorkout, history, templates, selectedTemplate, selectedTemplateId, expressMinutes, progress, timer, timerRemaining, notificationPermission, onSelectTemplate, onExpress, onStart, onRecovery, onCompleteSet, onSetChange, onSetBlur, onFeedback, onFinish, onDiscard, onEnableNotifications, onToggleTimer, onAdjustTimer, onCloseTimer } = props;
+  const { activeWorkout, history, templates, selectedTemplate, selectedTemplateId, expressMinutes, progress, finishArmed, notificationPermission, onSelectTemplate, onExpress, onStart, onRecovery, onCompleteSet, onSetChange, onSetBlur, onFeedback, onFinish, onDiscard, onEnableNotifications } = props;
   return (
     <section className="space-y-5">
       {!activeWorkout && (
@@ -384,19 +419,19 @@ function WorkoutScreen(props: any) {
             );
           })}
 
-          {timer && <TimerCard timer={timer} remaining={timerRemaining} onToggle={onToggleTimer} onAdjust={onAdjustTimer} onClose={onCloseTimer} />}
           {notificationPermission !== "granted" && notificationPermission !== "unsupported" && <button className="min-h-12 w-full rounded-xl border border-accent/40 bg-accent/10 font-black text-accent" onClick={onEnableNotifications}>Attiva notifiche timer</button>}
-          <div className="grid grid-cols-2 gap-3"><button className="min-h-14 rounded-xl bg-white/[0.08] font-bold text-white/65" onClick={onDiscard}>Scarta</button><button className="min-h-14 rounded-xl bg-white font-black text-ink disabled:opacity-35" disabled={!completedSetCount(activeWorkout)} onClick={onFinish}>Concludi</button></div>
+          <div className="grid grid-cols-2 gap-3"><button className="min-h-14 rounded-xl bg-white/[0.08] font-bold text-white/65" onClick={onDiscard}>Scarta</button><button className={`min-h-14 rounded-xl font-black disabled:opacity-35 ${finishArmed ? "bg-accent text-ink" : "bg-white text-ink"}`} disabled={!completedSetCount(activeWorkout)} onClick={onFinish}>{finishArmed ? "Tocca ancora" : "Concludi"}</button></div>
+          {finishArmed && <p className="-mt-1 text-center text-xs font-bold text-accent">Allenamento non completo: tocca ancora per chiuderlo.</p>}
         </>
       )}
     </section>
   );
 }
 
-function HistoryScreen({ history }: { history: WorkoutSession[] }) {
+function HistoryScreen({ history, onReopen }: { history: WorkoutSession[]; onReopen: (workout: WorkoutSession) => void }) {
   const [openId, setOpenId] = useState(history[0]?.id ?? "");
   if (!history.length) return <Empty title="Nessuno storico" body="Gli allenamenti conclusi resteranno qui, senza scadenza." />;
-  return <section className="space-y-3">{history.map((workout) => <Panel key={workout.id}><button className="w-full text-left" onClick={() => setOpenId(openId === workout.id ? "" : workout.id)}><div className="flex justify-between gap-3"><div><h2 className="text-xl font-black">{workout.templateName}</h2><p className="mt-1 text-sm text-white/50">{formatDate(workout.startedAt)}</p></div><div className="text-right"><p className="font-black text-accent">{formatVolume(workoutVolume(workout))}</p><p className="text-xs text-white/45">{formatDuration(workout.durationSeconds ?? 0)}</p></div></div></button>{openId === workout.id && <div className="mt-4 space-y-3 border-t border-white/10 pt-3">{workout.exercises.filter((exercise) => exercise.sets.some((set) => set.completed)).map((exercise) => <div key={exercise.name}><div className="flex justify-between"><p className="font-bold">{exercise.name}</p><p className="text-sm font-black text-accent">{formatVolume(exerciseVolume(exercise))}</p></div><p className="mt-1 text-sm text-white/50">{exercise.sets.filter((set) => set.completed).map((set) => `${set.weight}kg × ${set.reps}`).join(" · ")}</p></div>)}</div>}</Panel>)}</section>;
+  return <section className="space-y-3">{history.map((workout) => <Panel key={workout.id}><button className="w-full text-left" onClick={() => setOpenId(openId === workout.id ? "" : workout.id)}><div className="flex justify-between gap-3"><div><h2 className="text-xl font-black">{workout.templateName}</h2><p className="mt-1 text-sm text-white/50">{formatDate(workout.startedAt)}</p></div><div className="text-right"><p className="font-black text-accent">{formatVolume(workoutVolume(workout))}</p><p className="text-xs text-white/45">{formatDuration(workout.durationSeconds ?? 0)}</p></div></div></button>{openId === workout.id && <div className="mt-4 space-y-3 border-t border-white/10 pt-3">{workout.exercises.filter((exercise) => exercise.sets.some((set) => set.completed)).map((exercise) => <div key={exercise.name}><div className="flex justify-between"><p className="font-bold">{exercise.name}</p><p className="text-sm font-black text-accent">{formatVolume(exerciseVolume(exercise))}</p></div><p className="mt-1 text-sm text-white/50">{exercise.sets.filter((set) => set.completed).map((set) => `${set.weight}kg × ${set.reps}`).join(" · ")}</p></div>)}<button className="min-h-12 w-full rounded-xl border border-accent/40 bg-accent/10 font-black text-accent" onClick={() => onReopen(workout)}>Riapri e continua</button></div>}</Panel>)}</section>;
 }
 
 function ProgressScreen({ history, records, stats }: any) {
@@ -419,8 +454,26 @@ function Feedback({ exercise, onFeedback }: any) {
   return <div className="mt-4 space-y-3"><div><p className="mb-2 text-xs font-bold uppercase text-white/40">Tecnica</p><div className="grid grid-cols-4 gap-1">{ratings.map((rating) => <button key={rating} className={`min-h-10 rounded-lg text-xs font-bold ${exercise.feedback.technique === rating ? "bg-accent text-ink" : "bg-white/[0.07]"}`} onClick={() => onFeedback("technique", rating)}>{rating}</button>)}</div></div><Scale label="Difficoltà" value={exercise.feedback.rpe ?? 7} max={10} onChange={(value: number) => onFeedback("rpe", value)} /></div>;
 }
 
-function TimerCard({ timer, remaining, onToggle, onAdjust, onClose }: any) {
-  return <Panel highlight><div className="flex items-center justify-between"><div><p className="text-sm font-black text-accent">Timer attivo</p><p className="text-xs text-white/50">{timer.exercise}</p></div><p className="text-4xl font-black tabular-nums">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}</p></div><div className="mt-4 grid grid-cols-4 gap-2"><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={onToggle}>{timer.running ? "Pausa" : "Avvia"}</button><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={() => onAdjust(30)}>+30</button><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={() => onAdjust(-30)}>-30</button><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={onClose}>Chiudi</button></div></Panel>;
+function FixedTimerBadge({ timer, remaining, onToggle, onAdjust, onClose }: any) {
+  return (
+    <div className="fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md px-3">
+      <div className="rounded-2xl border border-accent/35 bg-[#10140d]/95 p-3 shadow-[0_0_34px_rgba(184,255,0,0.16)] backdrop-blur-xl">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase text-accent">Timer recupero</p>
+            <p className="truncate text-xs text-white/55">{timer.exercise}</p>
+          </div>
+          <p className="text-4xl font-black tabular-nums text-white">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}</p>
+        </div>
+        <div className="mt-3 grid grid-cols-[1fr_1fr_1fr_2.5rem] gap-2">
+          <button className="min-h-11 rounded-xl bg-white/[0.08] text-sm font-bold" onClick={onToggle}>{timer.running ? "Pausa" : "Avvia"}</button>
+          <button className="min-h-11 rounded-xl bg-white/[0.08] text-sm font-bold" onClick={() => onAdjust(30)}>+30</button>
+          <button className="min-h-11 rounded-xl bg-white/[0.08] text-sm font-bold" onClick={() => onAdjust(-30)}>-30</button>
+          <button aria-label="Chiudi timer" className="min-h-11 rounded-xl bg-white/[0.08] text-lg font-black text-white/60" onClick={onClose}>×</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Panel({ children, highlight = false }: { children: React.ReactNode; highlight?: boolean }) {
