@@ -180,10 +180,10 @@ export default function LeanApp() {
 
   function updateSet(exerciseIndex: number, setIndex: number, field: "reps" | "weight", value: string) {
     if (!activeWorkout) return;
-    const parsed = Number(value);
+    const parsed = parseLocaleNumber(value);
     if (!Number.isFinite(parsed) || parsed < 0) return;
     const session = structuredClone(activeWorkout);
-    session.exercises[exerciseIndex].sets[setIndex][field] = parsed;
+    session.exercises[exerciseIndex].sets[setIndex][field] = field === "reps" ? Math.round(parsed) : parsed;
     if (field === "weight") session.exercises[exerciseIndex].plannedWeight = parsed;
     setFinishArmed(false);
     setActiveWorkout(session);
@@ -410,10 +410,10 @@ function WorkoutScreen(props: any) {
             return (
               <Panel key={exercise.name}>
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">Tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${set.weight}kg × ${set.reps}`).join(" · ")}</p>}{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Suggerito prossimo peso: {formatNumber(suggestedWeight)}kg</p>}</div>
-                  <Chip>+{definition.increment}kg</Chip>
+                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">Tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Suggerito prossimo peso: {formatNumber(suggestedWeight)}kg</p>}</div>
+                  <Chip>+{formatNumber(definition.increment)}kg</Chip>
                 </div>
-                <div className="space-y-2">{exercise.sets.map((set, setIndex) => <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField label="kg" value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
+                <div className="space-y-2">{exercise.sets.map((set, setIndex) => <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField decimals label="kg" value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
                 <Feedback exercise={exercise} onFeedback={(field: "technique" | "rpe" | "notes", value: string | number) => onFeedback(exerciseIndex, field, value)} />
               </Panel>
             );
@@ -431,7 +431,7 @@ function WorkoutScreen(props: any) {
 function HistoryScreen({ history, onReopen }: { history: WorkoutSession[]; onReopen: (workout: WorkoutSession) => void }) {
   const [openId, setOpenId] = useState(history[0]?.id ?? "");
   if (!history.length) return <Empty title="Nessuno storico" body="Gli allenamenti conclusi resteranno qui, senza scadenza." />;
-  return <section className="space-y-3">{history.map((workout) => <Panel key={workout.id}><button className="w-full text-left" onClick={() => setOpenId(openId === workout.id ? "" : workout.id)}><div className="flex justify-between gap-3"><div><h2 className="text-xl font-black">{workout.templateName}</h2><p className="mt-1 text-sm text-white/50">{formatDate(workout.startedAt)}</p></div><div className="text-right"><p className="font-black text-accent">{formatVolume(workoutVolume(workout))}</p><p className="text-xs text-white/45">{formatDuration(workout.durationSeconds ?? 0)}</p></div></div></button>{openId === workout.id && <div className="mt-4 space-y-3 border-t border-white/10 pt-3">{workout.exercises.filter((exercise) => exercise.sets.some((set) => set.completed)).map((exercise) => <div key={exercise.name}><div className="flex justify-between"><p className="font-bold">{exercise.name}</p><p className="text-sm font-black text-accent">{formatVolume(exerciseVolume(exercise))}</p></div><p className="mt-1 text-sm text-white/50">{exercise.sets.filter((set) => set.completed).map((set) => `${set.weight}kg × ${set.reps}`).join(" · ")}</p></div>)}<button className="min-h-12 w-full rounded-xl border border-accent/40 bg-accent/10 font-black text-accent" onClick={() => onReopen(workout)}>Riapri e continua</button></div>}</Panel>)}</section>;
+  return <section className="space-y-3">{history.map((workout) => <Panel key={workout.id}><button className="w-full text-left" onClick={() => setOpenId(openId === workout.id ? "" : workout.id)}><div className="flex justify-between gap-3"><div><h2 className="text-xl font-black">{workout.templateName}</h2><p className="mt-1 text-sm text-white/50">{formatDate(workout.startedAt)}</p></div><div className="text-right"><p className="font-black text-accent">{formatVolume(workoutVolume(workout))}</p><p className="text-xs text-white/45">{formatDuration(workout.durationSeconds ?? 0)}</p></div></div></button>{openId === workout.id && <div className="mt-4 space-y-3 border-t border-white/10 pt-3">{workout.exercises.filter((exercise) => exercise.sets.some((set) => set.completed)).map((exercise) => <div key={exercise.name}><div className="flex justify-between"><p className="font-bold">{exercise.name}</p><p className="text-sm font-black text-accent">{formatVolume(exerciseVolume(exercise))}</p></div><p className="mt-1 text-sm text-white/50">{exercise.sets.filter((set) => set.completed).map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p></div>)}<button className="min-h-12 w-full rounded-xl border border-accent/40 bg-accent/10 font-black text-accent" onClick={() => onReopen(workout)}>Riapri e continua</button></div>}</Panel>)}</section>;
 }
 
 function ProgressScreen({ history, records, stats }: any) {
@@ -457,7 +457,7 @@ function Feedback({ exercise, onFeedback }: any) {
 function FixedTimerBadge({ timer, remaining, onToggle, onAdjust, onClose }: any) {
   return (
     <div className="fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md px-3">
-      <div className="rounded-2xl border border-accent/35 bg-[#10140d]/95 p-3 shadow-[0_0_34px_rgba(184,255,0,0.16)] backdrop-blur-xl">
+      <div className="rounded-2xl border border-accent/35 bg-[#07141a]/95 p-3 shadow-[0_0_34px_rgba(0,217,255,0.18)] backdrop-blur-xl">
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase text-accent">Timer recupero</p>
@@ -493,8 +493,30 @@ function Scale({ label, value, onChange, max = 5 }: { label: string; value: numb
   return <div><p className="mb-2 text-xs font-bold uppercase text-white/40">{label}</p><div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${max}, minmax(0, 1fr))` }}>{Array.from({ length: max }, (_, index) => index + 1).map((item) => <button className={`min-h-9 rounded-lg text-xs font-black ${value === item ? "bg-white text-ink" : "bg-white/[0.07]"}`} key={item} onClick={() => onChange(item)}>{item}</button>)}</div></div>;
 }
 
-function NumberField({ label, value, onChange, onBlur }: { label: string; value: number; onChange: (value: string) => void; onBlur: () => void }) {
-  return <label className="relative block"><input className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-2 pb-1 pt-4 text-center font-black outline-none focus:border-accent" inputMode="decimal" value={value} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} /><span className="pointer-events-none absolute left-0 right-0 top-1 text-center text-[0.6rem] font-bold uppercase text-white/35">{label}</span></label>;
+function NumberField({ decimals = false, label, value, onChange, onBlur }: { decimals?: boolean; label: string; value: number; onChange: (value: string) => void; onBlur: () => void }) {
+  const [draft, setDraft] = useState(formatNumber(value));
+
+  useEffect(() => {
+    setDraft(formatNumber(value));
+  }, [value]);
+
+  function handleChange(raw: string) {
+    const pattern = decimals ? /^\d*([,.]\d{0,2})?$/ : /^\d*$/;
+    if (!pattern.test(raw)) return;
+    setDraft(raw);
+    if (!raw || /[,.]$/.test(raw)) return;
+    const parsed = parseLocaleNumber(raw);
+    if (Number.isFinite(parsed)) onChange(String(parsed));
+  }
+
+  function handleBlur() {
+    const parsed = parseLocaleNumber(draft);
+    setDraft(Number.isFinite(parsed) ? formatNumber(parsed) : formatNumber(value));
+    if (Number.isFinite(parsed)) onChange(String(parsed));
+    onBlur();
+  }
+
+  return <label className="relative block"><input className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-2 pb-1 pt-4 text-center font-black outline-none focus:border-accent" inputMode={decimals ? "decimal" : "numeric"} value={draft} onBlur={handleBlur} onChange={(event) => handleChange(event.target.value)} /><span className="pointer-events-none absolute left-0 right-0 top-1 text-center text-[0.6rem] font-bold uppercase text-white/35">{label}</span></label>;
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
@@ -512,7 +534,11 @@ function getTimerRemaining(timer: RestTimer | null, currentTime: number) { if (!
 function formatDate(input: string) { return dateFormat.format(new Date(input)); }
 function formatDuration(seconds: number) { const minutes = Math.round(seconds / 60); return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`; }
 function formatVolume(volume: number) { return volume >= 1000 ? `${formatNumber(volume / 1000)}k kg` : `${formatNumber(volume)} kg`; }
-function formatNumber(value: number) { return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 }).format(value); }
+function formatNumber(value: number) { return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 2 }).format(value); }
+function parseLocaleNumber(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  return normalized ? Number(normalized) : Number.NaN;
+}
 function daysBetween(a: string, b: string) { return Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 86400000); }
 function titleFor(tab: Tab) { return { home: "Home", workout: "Allenamento", history: "Storico", progress: "Progressi", coach: "Coach", settings: "Impostazioni" }[tab]; }
 
