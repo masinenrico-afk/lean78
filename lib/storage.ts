@@ -1,5 +1,6 @@
 import { coachSummary, victories } from "./coachEngine";
 import { createBackup, validateBackup } from "./backupEngine";
+import { workoutProgressions } from "./progressionEngine";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RestTimer, WorkoutSession } from "./types";
 import { EXERCISES, expressExercises, createDefaultTemplates, type WorkoutTemplate } from "./workouts";
 
@@ -220,6 +221,7 @@ function normalizeLegacyWorkout(workout: Partial<WorkoutSession>, defaults: Work
 
 export function createWorkout(template: WorkoutTemplate, expressMinutes: number, history: WorkoutSession[] = []): WorkoutSession {
   const exercises = expressExercises(template, expressMinutes);
+  const returnFromBreak = isReturnFromBreak(history);
   return {
     id: uid("workout"),
     templateId: template.id,
@@ -228,11 +230,13 @@ export function createWorkout(template: WorkoutTemplate, expressMinutes: number,
     weeklyFocus: template.weeklyFocus,
     startedAt: new Date().toISOString(),
     expressMinutes,
+    returnFromBreak,
+    reentryUntil: returnFromBreak ? new Date(Date.now() + 7 * 86400000).toISOString() : undefined,
     exercises: exercises.map((exercise) => {
       const previous = previousExerciseValues(history, exercise.name);
       const previousWeight = previous[0]?.weight;
       const previousReps = previous[0]?.reps;
-      const plannedWeight = previousWeight ?? exercise.defaultWeight;
+      const plannedWeight = returnFromBreak && previousWeight ? roundToStep(previousWeight * 0.9, 1.25) : previousWeight ?? exercise.defaultWeight;
       const plannedReps = previousReps ?? exercise.defaultReps;
 
       return {
@@ -265,19 +269,34 @@ export function suggestedWeightForExercise(workouts: WorkoutSession[], exerciseN
   if (!definition) return undefined;
 
   const previous = previousExerciseValues(workouts, exerciseName);
+  const prior = previousExerciseValues(workouts.slice(1), exerciseName);
   if (previous.length < definition.defaultSets) return undefined;
 
   const relevantSets = previous.slice(0, definition.defaultSets);
+  const priorSets = prior.slice(0, definition.defaultSets);
   if (!relevantSets.every((set) => set.reps >= definition.repTarget)) return undefined;
+  if (priorSets.length < definition.defaultSets) return undefined;
+  if (!priorSets.every((set) => set.reps >= definition.repTarget)) return undefined;
 
-  return Math.max(...relevantSets.map((set) => set.weight)) + definition.increment;
+  const previousWeight = Math.max(...relevantSets.map((set) => set.weight));
+  const priorWeight = Math.max(...priorSets.map((set) => set.weight));
+  if (Math.abs(previousWeight - priorWeight) > 0.01) return undefined;
+
+  return roundToStep(previousWeight + definition.increment, 0.01);
 }
 
 export function normalizeWorkout(session: WorkoutSession): WorkoutSession {
   const durationSeconds =
     session.durationSeconds ??
     (session.completedAt ? Math.max(0, Math.round((new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 1000)) : undefined);
-  return { ...session, durationSeconds };
+  return {
+    ...session,
+    durationSeconds,
+    exercises: session.exercises.map((exercise) => ({
+      ...exercise,
+      feedback: exercise.feedback ?? {}
+    }))
+  };
 }
 
 export function completeWorkout(session: WorkoutSession, history: WorkoutSession[]) {
@@ -287,11 +306,35 @@ export function completeWorkout(session: WorkoutSession, history: WorkoutSession
     completedAt,
     durationSeconds: Math.max(1, Math.round((Date.now() - new Date(session.startedAt).getTime()) / 1000))
   };
+  const decisions = workoutProgressions(history, completed);
   return {
     ...completed,
+    exercises: completed.exercises.map((exercise) => {
+      const decision = decisions.find((item) => item.exercise === exercise.name);
+      return {
+        ...exercise,
+        progressionState: decision?.state,
+        progressionNote: decision?.detail
+      };
+    }),
     coachSummary: coachSummary(history, completed),
     victories: victories(completed)
   };
+}
+
+export function daysSinceLastCompletedWorkout(history: WorkoutSession[]) {
+  const last = [...history].filter((workout) => workout.completedAt).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+  if (!last) return 0;
+  return Math.floor((Date.now() - new Date(last.startedAt).getTime()) / 86400000);
+}
+
+export function isReturnFromBreak(history: WorkoutSession[]) {
+  const days = daysSinceLastCompletedWorkout(history);
+  return days >= 10 && days <= 21;
+}
+
+function roundToStep(value: number, step: number) {
+  return Math.round(value / step) * step;
 }
 
 export async function exportBackup() {

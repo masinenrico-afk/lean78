@@ -1,6 +1,7 @@
 import type { TemplateId, Tempo, WorkoutTemplate } from "./workouts";
 
 export type TechniqueRating = "Perfetta" | "Buona" | "Instabile" | "Scarsa";
+export type ProgressionState = "BUILDING" | "CONSOLIDATING" | "READY" | "NEW_LOAD";
 
 export type WorkoutSet = {
   reps: number;
@@ -12,6 +13,7 @@ export type WorkoutSet = {
 export type ExerciseFeedback = {
   technique?: TechniqueRating;
   rpe?: number;
+  rir?: number;
   notes?: string;
 };
 
@@ -24,6 +26,8 @@ export type WorkoutExercise = {
   holdSeconds?: number;
   sets: WorkoutSet[];
   feedback: ExerciseFeedback;
+  progressionState?: ProgressionState;
+  progressionNote?: string;
 };
 
 export type RecoveryCheck = {
@@ -44,6 +48,8 @@ export type WorkoutSession = {
   durationSeconds?: number;
   notes?: string;
   recovery?: RecoveryCheck;
+  returnFromBreak?: boolean;
+  reentryUntil?: string;
   expressMinutes: number;
   exercises: WorkoutExercise[];
   coachSummary?: string[];

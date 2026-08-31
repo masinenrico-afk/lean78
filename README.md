@@ -12,10 +12,10 @@ LeanME è una Progressive Web App per iPhone, offline-first, pensata come un com
 ## Struttura prodotto
 
 - Home: prossimo allenamento, missione, focus settimanale, recupero, avvio rapido, promemoria backup
-- Allenamento: rotazione A/B/C, check recupero, modalità express, tempo/tenute, feedback tecnica, RPE, timer recupero
+- Allenamento: rotazione A/B/C, check recupero, modalità express, tempo/tenute, feedback tecnica, RPE/RIR, timer recupero
 - Storico: timeline cronologica permanente
 - Progressi: dashboard lifetime, record personali, andamento esercizi
-- Coach: riepilogo umano, suggerimenti di progressione, obiettivi settimanali
+- Coach: riepilogo umano, suggerimenti di progressione, stati BUILDING/CONSOLIDATING/READY/NEW LOAD, obiettivi settimanali
 - Impostazioni: Autopilot, esportazione/importazione backup
 
 ## Architettura
@@ -36,6 +36,7 @@ LeanME è una Progressive Web App per iPhone, offline-first, pensata come un com
 - Service worker
 - App shell offline
 - Dati locali in IndexedDB
+- Accento visivo: azzurro elettrico `#00D9FF`
 
 ## Backup
 
@@ -45,7 +46,7 @@ Esporta un JSON leggibile chiamato:
 LeanME_Backup_YYYY-MM-DD.json
 ```
 
-Include allenamenti, template, dati per la progressione, storico, PR, impostazioni, note, preferenze, dati coach, recupero, versione app, versione schema e data backup.
+Include allenamenti, template, RPE/RIR, stati progressione, storico, PR, impostazioni, note, preferenze, dati coach, recupero, versione app, versione schema e data backup.
 
 ## Avvio locale
 

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { calculatePersonalRecords, completedSetCount, exerciseTimeline, exerciseVolume, lifetimeStats, workoutVolume } from "@/lib/analyticsEngine";
 import { backupFilename, validateBackup } from "@/lib/backupEngine";
 import { warmupAdvice, weeklyGoals } from "@/lib/coachEngine";
-import { workoutProgressions } from "@/lib/progressionEngine";
+import { progressionForExercise, workoutProgressions } from "@/lib/progressionEngine";
 import { recoveryScore, recoveryStatus } from "@/lib/recoveryEngine";
 import {
   completeWorkout,
@@ -19,7 +19,8 @@ import {
   previewBackup,
   putItem,
   seedAppData,
-  suggestedWeightForExercise
+  suggestedWeightForExercise,
+  daysSinceLastCompletedWorkout
 } from "@/lib/storage";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, TechniqueRating, WorkoutSession } from "@/lib/types";
 import { EXERCISES, REST_SECONDS, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
@@ -111,6 +112,7 @@ export default function LeanApp() {
   const goals = useMemo(() => coachData.weeklyGoals.length ? coachData.weeklyGoals : weeklyGoals(history), [coachData, history]);
   const progress = activeWorkout ? Math.round((completedSetCount(activeWorkout) / activeWorkout.exercises.flatMap((exercise) => exercise.sets).length) * 100) : 0;
   const needsBackup = !settings.lastBackupAt || daysBetween(settings.lastBackupAt, new Date().toISOString()) >= 30;
+  const daysAway = daysSinceLastCompletedWorkout(history);
 
   async function startWorkout() {
     if (!nextTemplate) return;
@@ -218,7 +220,7 @@ export default function LeanApp() {
     await persistActive(session);
   }
 
-  async function setFeedback(exerciseIndex: number, field: "technique" | "rpe" | "notes", value: string | number) {
+  async function setFeedback(exerciseIndex: number, field: "technique" | "rpe" | "rir" | "notes", value: string | number) {
     if (!activeWorkout) return;
     const session = structuredClone(activeWorkout);
     session.exercises[exerciseIndex].feedback = { ...session.exercises[exerciseIndex].feedback, [field]: value };
@@ -310,11 +312,11 @@ export default function LeanApp() {
       </header>
 
       <div className={`flex-1 px-5 pt-5 ${activeWorkout && timer ? "pb-64" : "pb-40"}`}>
-        {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} onStart={startWorkout} onResume={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
+        {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} daysAway={daysAway} onStart={startWorkout} onResume={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
         {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={startWorkout} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
         {tab === "history" && <HistoryScreen history={history} onReopen={reopenWorkout} />}
         {tab === "progress" && <ProgressScreen history={history} records={records} stats={stats} />}
-        {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} />}
+        {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} daysAway={daysAway} />}
         {tab === "settings" && <SettingsScreen settings={settings} importPreview={importPreview} history={history} onSettings={updateSettings} onBackup={downloadBackup} onImportFile={onImportFile} onConfirmImport={confirmImport} onCancelImport={() => setImportPreview(null)} />}
       </div>
 
@@ -324,7 +326,7 @@ export default function LeanApp() {
   );
 }
 
-function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expressMinutes, setExpressMinutes, needsBackup, onStart, onResume, onBackup, onLater }: any) {
+function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expressMinutes, setExpressMinutes, needsBackup, daysAway, onStart, onResume, onBackup, onLater }: any) {
   return (
     <section className="space-y-5">
       <Panel highlight>
@@ -337,6 +339,8 @@ function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expre
           <button className="min-h-14 rounded-xl bg-white px-5 font-black text-ink" onClick={activeWorkout ? onResume : onStart}>{activeWorkout ? "Riprendi" : "Inizia"}</button>
         </div>
       </Panel>
+
+      {daysAway >= 10 && daysAway <= 21 && !activeWorkout && <Panel highlight><p className="text-sm font-black text-accent">Settimana di rientro</p><h3 className="mt-1 text-2xl font-black">Riparti senza rincorrere i numeri.</h3><p className="mt-2 text-sm text-white/65">Sono passati {daysAway} giorni. LeanME userà circa il 90% dei carichi precedenti e più margine.</p></Panel>}
 
       <Panel>
         <p className="text-sm text-white/55">Focus della settimana</p>
@@ -401,20 +405,23 @@ function WorkoutScreen(props: any) {
             <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-all" style={{ width: `${progress}%` }} /></div>
           </Panel>
 
+          {activeWorkout.returnFromBreak && <Panel highlight><p className="text-sm font-black text-accent">Settimana di rientro</p><h2 className="mt-1 text-2xl font-black">Non inseguire i numeri oggi.</h2><p className="mt-2 text-sm text-white/65">La tua performance precedente è salvata. Ricostruiamo ritmo, tecnica e sicurezza con gradualità.</p></Panel>}
+
           {warmupAdvice(activeWorkout.templateName).length > 0 && <Panel><p className="text-sm text-white/55">Preparazione 3-5 minuti</p><div className="mt-3 flex flex-wrap gap-2">{warmupAdvice(activeWorkout.templateName).map((item: string) => <Chip key={item}>{item}</Chip>)}</div></Panel>}
 
           {activeWorkout.exercises.map((exercise: WorkoutSession["exercises"][number], exerciseIndex: number) => {
             const definition = EXERCISES[exercise.name];
             const previous = previousExerciseValues(history, exercise.name);
             const suggestedWeight = suggestedWeightForExercise(history, exercise.name);
+            const decision = progressionForExercise(history, exercise, activeWorkout.recovery, activeWorkout.returnFromBreak);
             return (
               <Panel key={exercise.name}>
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">Tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Suggerito prossimo peso: {formatNumber(suggestedWeight)}kg</p>}</div>
-                  <Chip>+{formatNumber(definition.increment)}kg</Chip>
+                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">Tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Puoi considerare: {formatNumber(suggestedWeight)}kg</p>}</div>
+                  <Chip>{stateLabel(decision.state)}</Chip>
                 </div>
                 <div className="space-y-2">{exercise.sets.map((set, setIndex) => <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField decimals label="kg" value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
-                <Feedback exercise={exercise} onFeedback={(field: "technique" | "rpe" | "notes", value: string | number) => onFeedback(exerciseIndex, field, value)} />
+                <Feedback exercise={exercise} onFeedback={(field: "technique" | "rpe" | "rir" | "notes", value: string | number) => onFeedback(exerciseIndex, field, value)} />
               </Panel>
             );
           })}
@@ -437,12 +444,14 @@ function HistoryScreen({ history, onReopen }: { history: WorkoutSession[]; onReo
 function ProgressScreen({ history, records, stats }: any) {
   const firstRecord = records[0];
   const timeline = firstRecord ? exerciseTimeline(history, firstRecord.exercise) : [];
-  return <section className="space-y-5"><div className="grid grid-cols-2 gap-3"><Stat label="Allenamenti" value={String(stats.workoutsCompleted)} /><Stat label="Volume" value={formatVolume(stats.totalVolume)} /><Stat label="Ore" value={formatNumber(stats.hoursTrained)} /><Stat label="PR attuali" value={String(stats.currentPrs)} /></div>{firstRecord && <Panel><p className="text-sm text-white/55">Andamento esercizio</p><h2 className="mt-1 text-2xl font-black">{firstRecord.exercise}</h2><MiniChart points={timeline.map((item: any) => item.weight)} /></Panel>}<section className="space-y-3">{records.map((record: any) => <Panel key={record.exercise}><div className="flex items-center justify-between"><h3 className="font-black">{record.exercise}</h3><Chip>PR</Chip></div><div className="mt-4 grid grid-cols-3 gap-2"><MiniMetric label="Peso" value={`${formatNumber(record.highestWeight)}kg`} /><MiniMetric label="1RM stim." value={`${formatNumber(record.estimatedOneRepMax)}kg`} /><MiniMetric label="Volume" value={formatVolume(record.bestVolume)} /></div></Panel>)}</section></section>;
+  const rows = firstRecord ? progressionRows(history, firstRecord.exercise) : [];
+  return <section className="space-y-5"><div className="grid grid-cols-2 gap-3"><Stat label="Allenamenti" value={String(stats.workoutsCompleted)} /><Stat label="Volume" value={formatVolume(stats.totalVolume)} /><Stat label="Ore" value={formatNumber(stats.hoursTrained)} /><Stat label="PR attuali" value={String(stats.currentPrs)} /></div>{firstRecord && <Panel><p className="text-sm text-white/55">Andamento esercizio</p><h2 className="mt-1 text-2xl font-black">{firstRecord.exercise}</h2><MiniChart points={timeline.map((item: any) => item.weight)} />{rows.length > 0 && <div className="mt-4 space-y-2">{rows.map((row) => <div className="rounded-xl bg-white/[0.05] p-3" key={row.date}><div className="flex items-center justify-between gap-3"><p className="text-sm font-black">{formatDate(row.date)}</p><Chip>{stateLabel(row.state)}</Chip></div><p className="mt-1 text-xs text-white/55">Prima {row.previousLoad} · Ora {row.currentLoad}</p><p className="mt-1 text-xs text-white/55">Reps: {row.previousReps} → {row.currentReps}</p><p className="mt-2 text-xs text-accent">{row.nextStep}</p></div>)}</div>}</Panel>}<section className="space-y-3">{records.map((record: any) => <Panel key={record.exercise}><div className="flex items-center justify-between"><h3 className="font-black">{record.exercise}</h3><Chip>PR</Chip></div><div className="mt-4 grid grid-cols-3 gap-2"><MiniMetric label="Peso" value={`${formatNumber(record.highestWeight)}kg`} /><MiniMetric label="1RM stim." value={`${formatNumber(record.estimatedOneRepMax)}kg`} /><MiniMetric label="Volume" value={formatVolume(record.bestVolume)} /></div></Panel>)}</section></section>;
 }
 
-function CoachScreen({ history, goals, progressions }: any) {
+function CoachScreen({ history, goals, progressions, daysAway }: any) {
   const last = history[0];
-  return <section className="space-y-5"><Panel highlight><p className="text-sm text-white/55">Coach</p><h2 className="mt-1 text-3xl font-black">Pronto quando vuoi.</h2><p className="mt-2 text-sm text-white/65">Il piano è semplice: muoviti bene, poi progredisci.</p></Panel><Panel><p className="font-black">Questa settimana</p><div className="mt-3 space-y-2">{goals.map((goal: string) => <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm" key={goal}>{goal}</p>)}</div></Panel>{last?.coachSummary && <Panel><p className="font-black">Riepilogo ultimo allenamento</p><div className="mt-3 space-y-2">{last.coachSummary.map((line: string) => <p className="text-sm text-white/65" key={line}>{line}</p>)}</div></Panel>}<Panel><p className="font-black">Suggerimenti progressione</p><div className="mt-3 space-y-2">{progressions.slice(0, 5).map((item: any) => <div key={item.exercise} className="rounded-xl bg-white/[0.05] p-3"><p className="font-bold text-accent">{item.exercise}: {item.label}</p><p className="mt-1 text-sm text-white/55">{item.detail}</p></div>)}</div></Panel></section>;
+  const top = progressions[0];
+  return <section className="space-y-5"><Panel highlight><p className="text-sm text-white/55">Coach</p><h2 className="mt-1 text-3xl font-black">{daysAway >= 10 && daysAway <= 21 ? "Rientro tranquillo." : "Pronto quando vuoi."}</h2><p className="mt-2 text-sm text-white/65">{daysAway >= 10 && daysAway <= 21 ? "La performance precedente è salva. Oggi conta ritrovare ritmo." : "Il piano è semplice: muoviti bene, poi progredisci."}</p></Panel>{top && <Panel><p className="text-sm text-white/55">Raccomandazione di oggi</p><h2 className="mt-1 text-2xl font-black text-accent">{top.exercise}</h2><div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Stato" value={stateLabel(top.state)} /><MiniMetric label="Azione" value={top.label} /></div><p className="mt-3 text-sm text-white/65"><span className="font-black text-white">Perché: </span>{top.why}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa fare: </span>{top.doThis}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa evitare: </span>{top.avoid}</p></Panel>}<Panel><p className="font-black">Questa settimana</p><div className="mt-3 space-y-2">{goals.map((goal: string) => <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm" key={goal}>{goal}</p>)}</div></Panel>{last?.coachSummary && <Panel><p className="font-black">Riepilogo ultimo allenamento</p><div className="mt-3 space-y-2">{last.coachSummary.map((line: string) => <p className="text-sm text-white/65" key={line}>{line}</p>)}</div></Panel>}<Panel><p className="font-black">Suggerimenti progressione</p><div className="mt-3 space-y-2">{progressions.slice(0, 5).map((item: any) => <div key={item.exercise} className="rounded-xl bg-white/[0.05] p-3"><p className="font-bold text-accent">{item.exercise}: {stateLabel(item.state)} · {item.label}</p><p className="mt-1 text-sm text-white/55">{item.detail}</p></div>)}</div></Panel></section>;
 }
 
 function SettingsScreen({ settings, importPreview, history, onSettings, onBackup, onImportFile, onConfirmImport, onCancelImport }: any) {
@@ -451,7 +460,12 @@ function SettingsScreen({ settings, importPreview, history, onSettings, onBackup
 
 function Feedback({ exercise, onFeedback }: any) {
   const ratings: TechniqueRating[] = ["Perfetta", "Buona", "Instabile", "Scarsa"];
-  return <div className="mt-4 space-y-3"><div><p className="mb-2 text-xs font-bold uppercase text-white/40">Tecnica</p><div className="grid grid-cols-4 gap-1">{ratings.map((rating) => <button key={rating} className={`min-h-10 rounded-lg text-xs font-bold ${exercise.feedback.technique === rating ? "bg-accent text-ink" : "bg-white/[0.07]"}`} onClick={() => onFeedback("technique", rating)}>{rating}</button>)}</div></div><Scale label="Difficoltà" value={exercise.feedback.rpe ?? 7} max={10} onChange={(value: number) => onFeedback("rpe", value)} /></div>;
+  return <div className="mt-4 space-y-3"><div><p className="mb-2 text-xs font-bold uppercase text-white/40">Tecnica</p><div className="grid grid-cols-4 gap-1">{ratings.map((rating) => <button key={rating} className={`min-h-10 rounded-lg text-xs font-bold ${exercise.feedback.technique === rating ? "bg-accent text-ink" : "bg-white/[0.07]"}`} onClick={() => onFeedback("technique", rating)}>{rating}</button>)}</div></div><Scale label="Difficoltà" value={exercise.feedback.rpe ?? 7} max={10} onChange={(value: number) => onFeedback("rpe", value)} /><RirScale value={exercise.feedback.rir ?? 2} onChange={(value: number) => onFeedback("rir", value)} /></div>;
+}
+
+function RirScale({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const values = [0, 1, 2, 3, 4, 5];
+  return <div><p className="mb-2 text-xs font-bold uppercase text-white/40">RIR</p><div className="grid grid-cols-6 gap-1">{values.map((item) => <button className={`min-h-9 rounded-lg text-xs font-black ${value === item ? "bg-accent text-ink" : "bg-white/[0.07]"}`} key={item} onClick={() => onChange(item)}>{item === 5 ? "5+" : item}</button>)}</div></div>;
 }
 
 function FixedTimerBadge({ timer, remaining, onToggle, onAdjust, onClose }: any) {
@@ -541,6 +555,38 @@ function parseLocaleNumber(value: string) {
 }
 function daysBetween(a: string, b: string) { return Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 86400000); }
 function titleFor(tab: Tab) { return { home: "Home", workout: "Allenamento", history: "Storico", progress: "Progressi", coach: "Coach", settings: "Impostazioni" }[tab]; }
+function stateLabel(state: string) { return { BUILDING: "Costruzione", CONSOLIDATING: "Consolida", READY: "Pronto", NEW_LOAD: "Nuovo carico" }[state] ?? state; }
+
+function progressionRows(history: WorkoutSession[], exerciseName: string) {
+  const sessions = [...history]
+    .filter((workout) => workout.completedAt)
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    .map((workout) => {
+      const exercise = workout.exercises.find((item) => item.name === exerciseName);
+      const sets = exercise?.sets.filter((set) => set.completed) ?? [];
+      if (!exercise || !sets.length) return null;
+      return {
+        date: workout.startedAt,
+        state: exercise.progressionState ?? "BUILDING",
+        load: Math.max(...sets.map((set) => set.weight)),
+        reps: sets.map((set) => set.reps).join("/")
+      };
+    })
+    .filter(Boolean) as Array<{ date: string; state: string; load: number; reps: string }>;
+
+  return sessions.slice(-4).map((session, index, list) => {
+    const previous = list[index - 1];
+    return {
+      date: session.date,
+      state: session.state,
+      previousLoad: previous ? `${formatNumber(previous.load)}kg` : "n/d",
+      currentLoad: `${formatNumber(session.load)}kg`,
+      previousReps: previous?.reps ?? "n/d",
+      currentReps: session.reps,
+      nextStep: stateLabel(session.state) === "Pronto" ? "Valuta il prossimo carico solo se ti senti stabile." : "Mantieni qualità, controllo e margine."
+    };
+  });
+}
 
 async function notifyTimerDone(exercise: string) {
   if ("vibrate" in navigator) navigator.vibrate([250, 100, 250]);
