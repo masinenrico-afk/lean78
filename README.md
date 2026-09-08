@@ -12,7 +12,7 @@ LeanME è una Progressive Web App per iPhone, offline-first, pensata come un com
 ## Struttura prodotto
 
 - Home: prossimo allenamento, missione, focus settimanale, recupero, avvio rapido, promemoria backup
-- Allenamento: rotazione A/B/C, check recupero, modalità express, tempo/tenute, feedback tecnica, RPE/RIR, timer recupero
+- Allenamento: rotazione A/B/C, check recupero, durata 30/45/60/90, range reps per esercizio, alternative manuali ricordate nel template, feedback tecnica, RPE/RIR, timer recupero
 - Storico: timeline cronologica permanente
 - Progressi: dashboard lifetime, record personali, andamento esercizi
 - Coach: riepilogo umano, suggerimenti di progressione, stati BUILDING/CONSOLIDATING/READY/NEW LOAD, obiettivi settimanali
@@ -37,6 +37,13 @@ LeanME è una Progressive Web App per iPhone, offline-first, pensata come un com
 - App shell offline
 - Dati locali in IndexedDB
 - Accento visivo: azzurro elettrico `#00D9FF`
+
+## Durata e progressione
+
+- 60 minuti mantiene il programma completo; 45 minuti conserva le famiglie muscolari presenti nel template e porta le serie a due quando possibile.
+- 30 minuti privilegia i movimenti principali; 90 minuti lascia spazio a volume accessorio e lavoro tecnico senza imporli.
+- Il carico viene suggerito solo dopo due prestazioni stabili allo stesso peso, con tecnica adeguata, RPE non alto, RIR sufficiente e recupero valido.
+- Dopo almeno 10 giorni di pausa, il primo allenamento parte intorno al 90% del precedente e non propone record.
 
 ## Backup
 

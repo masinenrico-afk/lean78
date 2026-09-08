@@ -1,6 +1,7 @@
 import { coachSummary, victories } from "./coachEngine";
 import { createBackup, validateBackup } from "./backupEngine";
 import { workoutProgressions } from "./progressionEngine";
+import { shouldMaintainLoad } from "./recoveryEngine";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RestTimer, WorkoutSession } from "./types";
 import { EXERCISES, expressExercises, createDefaultTemplates, type WorkoutTemplate } from "./workouts";
 
@@ -246,7 +247,7 @@ export function createWorkout(template: WorkoutTemplate, expressMinutes: number,
         plannedWeight,
         sets: Array.from({ length: exercise.defaultSets }, (_, index) => ({
           reps: previous[index]?.reps ?? plannedReps,
-          weight: previous[index]?.weight ?? plannedWeight,
+          weight: returnFromBreak ? plannedWeight : previous[index]?.weight ?? plannedWeight,
           completed: false
         })),
         feedback: {}
@@ -268,18 +269,34 @@ export function suggestedWeightForExercise(workouts: WorkoutSession[], exerciseN
   const definition = EXERCISES[exerciseName];
   if (!definition) return undefined;
 
-  const previous = previousExerciseValues(workouts, exerciseName);
-  const prior = previousExerciseValues(workouts.slice(1), exerciseName);
-  if (previous.length < definition.defaultSets) return undefined;
+  const recent = [...workouts]
+    .filter((workout) => workout.completedAt)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    .flatMap((workout) => {
+      const exercise = workout.exercises.find((item) => item.name === exerciseName && item.sets.some((set) => set.completed));
+      return exercise ? [{ exercise, recovery: workout.recovery }] : [];
+    })
+    .slice(0, 2);
+  if (recent.length < 2) return undefined;
 
-  const relevantSets = previous.slice(0, definition.defaultSets);
-  const priorSets = prior.slice(0, definition.defaultSets);
-  if (!relevantSets.every((set) => set.reps >= definition.repTarget)) return undefined;
-  if (priorSets.length < definition.defaultSets) return undefined;
-  if (!priorSets.every((set) => set.reps >= definition.repTarget)) return undefined;
+  const [latest, prior] = recent;
+  const isStableSession = (item: (typeof recent)[number]) => {
+    const sets = item.exercise.sets.filter((set) => set.completed).slice(0, definition.defaultSets);
+    const technique = item.exercise.feedback.technique;
+    const rpe = item.exercise.feedback.rpe ?? 7;
+    const rir = item.exercise.feedback.rir;
+    return sets.length >= definition.defaultSets
+      && sets.every((set) => set.reps >= definition.repTarget)
+      && technique !== "Scarsa"
+      && technique !== "Instabile"
+      && rpe <= 8
+      && (rir === undefined || rir >= 1)
+      && !shouldMaintainLoad(item.recovery);
+  };
+  if (!isStableSession(latest) || !isStableSession(prior)) return undefined;
 
-  const previousWeight = Math.max(...relevantSets.map((set) => set.weight));
-  const priorWeight = Math.max(...priorSets.map((set) => set.weight));
+  const previousWeight = Math.max(...latest.exercise.sets.filter((set) => set.completed).map((set) => set.weight));
+  const priorWeight = Math.max(...prior.exercise.sets.filter((set) => set.completed).map((set) => set.weight));
   if (Math.abs(previousWeight - priorWeight) > 0.01) return undefined;
 
   return roundToStep(previousWeight + definition.increment, 0.01);
@@ -330,7 +347,7 @@ export function daysSinceLastCompletedWorkout(history: WorkoutSession[]) {
 
 export function isReturnFromBreak(history: WorkoutSession[]) {
   const days = daysSinceLastCompletedWorkout(history);
-  return days >= 10 && days <= 21;
+  return days >= 10;
 }
 
 function roundToStep(value: number, step: number) {

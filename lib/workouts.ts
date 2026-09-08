@@ -5,10 +5,12 @@ export type Tempo = "3-0-1" | "4-1-1" | "2-1-2";
 export type ExerciseDefinition = {
   name: string;
   kind: ExerciseKind;
+  focus: "legs" | "chest" | "back" | "shoulders" | "arms" | "core";
   priority: "high" | "medium" | "low";
   defaultSets: number;
   defaultReps: number;
   repTarget: number;
+  repRange: string;
   defaultWeight: number;
   increment: number;
   tempo?: Tempo;
@@ -44,22 +46,66 @@ export const REST_SECONDS: Record<ExerciseKind, number> = {
 };
 
 export const EXERCISES: Record<string, ExerciseDefinition> = {
-  "Leg Press": { name: "Leg Press", kind: "compound", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 100, increment: 10, tempo: "3-0-1" },
-  "Calf Raises": { name: "Calf Raises", kind: "isolation", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, defaultWeight: 20, increment: 2.5, tempo: "2-1-2" },
-  "Chest Press": { name: "Chest Press", kind: "machine", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 30, increment: 1.25, tempo: "3-0-1", holdSeconds: 1 },
-  "Lat Machine": { name: "Lat Machine", kind: "machine", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 35, increment: 2.5, tempo: "3-0-1", holdSeconds: 2 },
-  "Shoulder Press": { name: "Shoulder Press", kind: "machine", priority: "medium", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 15, increment: 1.25, tempo: "3-0-1" },
-  "Lateral Raises": { name: "Lateral Raises", kind: "isolation", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 15, defaultWeight: 3, increment: 1, tempo: "2-1-2", holdSeconds: 2 },
-  "Triceps Pushdown": { name: "Triceps Pushdown", kind: "isolation", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" },
-  "Crunch Machine": { name: "Crunch Machine", kind: "abs", priority: "low", defaultSets: 3, defaultReps: 12, repTarget: 20, defaultWeight: 60, increment: 2.5, tempo: "2-1-2" },
-  "Hack Squat": { name: "Hack Squat", kind: "compound", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 40, increment: 10, tempo: "3-0-1" },
-  "Pulley Row": { name: "Pulley Row", kind: "machine", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 45, increment: 2.5, tempo: "3-0-1" },
-  "Assisted Pull Ups": { name: "Assisted Pull Ups", kind: "machine", priority: "medium", defaultSets: 3, defaultReps: 8, repTarget: 12, defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
-  "Leg Curl": { name: "Leg Curl", kind: "machine", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 15, defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
-  "Dumbbell Curl": { name: "Dumbbell Curl", kind: "isolation", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, defaultWeight: 8, increment: 1.25, tempo: "2-1-2" },
-  "Face Pull": { name: "Face Pull", kind: "isolation", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2", holdSeconds: 1, warmup: true },
-  "Hammer Curl": { name: "Hammer Curl", kind: "isolation", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, defaultWeight: 10, increment: 1.25, tempo: "2-1-2" }
+  "Leg Press": { name: "Leg Press", kind: "compound", focus: "legs", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 100, increment: 10, tempo: "3-0-1" },
+  "Calf Raises": { name: "Calf Raises", kind: "isolation", focus: "legs", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 20, increment: 2.5, tempo: "2-1-2" },
+  "Chest Press": { name: "Chest Press", kind: "machine", focus: "chest", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 1.25, tempo: "3-0-1", holdSeconds: 1 },
+  "Lat Machine": { name: "Lat Machine", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 35, increment: 2.5, tempo: "3-0-1", holdSeconds: 2 },
+  "Shoulder Press": { name: "Shoulder Press", kind: "machine", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 15, increment: 1.25, tempo: "3-0-1" },
+  "Lateral Raises": { name: "Lateral Raises", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 3, increment: 1, tempo: "2-1-2", holdSeconds: 2 },
+  "Triceps Pushdown": { name: "Triceps Pushdown", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" },
+  "Crunch Machine": { name: "Crunch Machine", kind: "abs", focus: "core", priority: "low", defaultSets: 3, defaultReps: 12, repTarget: 20, repRange: "12-20", defaultWeight: 60, increment: 2.5, tempo: "2-1-2" },
+  "Hack Squat": { name: "Hack Squat", kind: "compound", focus: "legs", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 40, increment: 10, tempo: "3-0-1" },
+  "Pulley Row": { name: "Pulley Row", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 45, increment: 2.5, tempo: "3-0-1" },
+  "Assisted Pull Ups": { name: "Assisted Pull Ups", kind: "machine", focus: "back", priority: "medium", defaultSets: 3, defaultReps: 6, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
+  "Leg Curl": { name: "Leg Curl", kind: "machine", focus: "legs", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
+  "Dumbbell Curl": { name: "Dumbbell Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 8, increment: 1.25, tempo: "2-1-2" },
+  "Face Pull": { name: "Face Pull", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2", holdSeconds: 1, warmup: true },
+  "Hammer Curl": { name: "Hammer Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 10, increment: 1.25, tempo: "2-1-2" },
+  "Standing Calf Raise": { name: "Standing Calf Raise", kind: "isolation", focus: "legs", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 20, increment: 2.5, tempo: "2-1-2" },
+  "Dumbbell Chest Press": { name: "Dumbbell Chest Press", kind: "compound", focus: "chest", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 12.5, increment: 1.25, tempo: "3-0-1" },
+  "Dumbbell Shoulder Press": { name: "Dumbbell Shoulder Press", kind: "compound", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 8, increment: 1.25, tempo: "3-0-1" },
+  "Cable Lateral Raise": { name: "Cable Lateral Raise", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 3, increment: 1, tempo: "2-1-2" },
+  "Cable Overhead Extension": { name: "Cable Overhead Extension", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" },
+  "Cable Crunch": { name: "Cable Crunch", kind: "abs", focus: "core", priority: "low", defaultSets: 3, defaultReps: 12, repTarget: 20, repRange: "12-20", defaultWeight: 30, increment: 2.5, tempo: "2-1-2" },
+  "Chest Supported Row": { name: "Chest Supported Row", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 35, increment: 2.5, tempo: "3-0-1" },
+  "Seated Leg Curl": { name: "Seated Leg Curl", kind: "machine", focus: "legs", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
+  "Cable Curl": { name: "Cable Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 10, increment: 1.25, tempo: "2-1-2" },
+  "Rear Delt Cable Fly": { name: "Rear Delt Cable Fly", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 5, increment: 1.25, tempo: "2-1-2" },
+  "Rope Hammer Curl": { name: "Rope Hammer Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" }
 };
+
+const ALTERNATIVES: Record<string, string[]> = {
+  "Leg Press": ["Hack Squat"],
+  "Hack Squat": ["Leg Press"],
+  "Calf Raises": ["Standing Calf Raise"],
+  "Standing Calf Raise": ["Calf Raises"],
+  "Chest Press": ["Dumbbell Chest Press"],
+  "Dumbbell Chest Press": ["Chest Press"],
+  "Lat Machine": ["Assisted Pull Ups"],
+  "Assisted Pull Ups": ["Lat Machine"],
+  "Pulley Row": ["Chest Supported Row"],
+  "Chest Supported Row": ["Pulley Row"],
+  "Shoulder Press": ["Dumbbell Shoulder Press"],
+  "Dumbbell Shoulder Press": ["Shoulder Press"],
+  "Lateral Raises": ["Cable Lateral Raise"],
+  "Cable Lateral Raise": ["Lateral Raises"],
+  "Triceps Pushdown": ["Cable Overhead Extension"],
+  "Cable Overhead Extension": ["Triceps Pushdown"],
+  "Crunch Machine": ["Cable Crunch"],
+  "Cable Crunch": ["Crunch Machine"],
+  "Leg Curl": ["Seated Leg Curl"],
+  "Seated Leg Curl": ["Leg Curl"],
+  "Dumbbell Curl": ["Cable Curl"],
+  "Cable Curl": ["Dumbbell Curl"],
+  "Face Pull": ["Rear Delt Cable Fly"],
+  "Rear Delt Cable Fly": ["Face Pull"],
+  "Hammer Curl": ["Rope Hammer Curl"],
+  "Rope Hammer Curl": ["Hammer Curl"]
+};
+
+export function exerciseAlternatives(name: string) {
+  return ALTERNATIVES[name] ?? [];
+}
 
 const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission: string; weeklyFocus: string; exercises: string[] }> = {
   "day-a": {
@@ -113,9 +159,21 @@ export function getNextTemplate(templates: WorkoutTemplate[], lastTemplateId?: T
 }
 
 export function expressExercises(template: WorkoutTemplate, minutes: number) {
-  if (minutes >= 90) return template.exercises;
+  if (minutes >= 60) return template.exercises;
   const required = template.exercises.filter((exercise) => exercise.priority === "high");
   if (minutes <= 30) return [...required, ...template.exercises.filter((exercise) => exercise.priority === "medium").slice(0, 1)];
-  if (minutes <= 45) return template.exercises.filter((exercise) => exercise.priority !== "low");
-  return template.exercises.filter((exercise) => exercise.priority !== "low").concat(template.exercises.filter((exercise) => exercise.priority === "low").slice(0, 2));
+  if (minutes <= 45) {
+    const focusOrder: ExerciseDefinition["focus"][] = ["legs", "chest", "back", "shoulders", "arms", "core"];
+    const selectedNames = new Set(
+      focusOrder.flatMap((focus) => {
+        const candidates = template.exercises.filter((exercise) => EXERCISES[exercise.name]?.focus === focus);
+        const preferred = candidates.find((exercise) => exercise.priority === "high") ?? candidates.find((exercise) => exercise.priority === "medium") ?? candidates[0];
+        return preferred ? [preferred.name] : [];
+      })
+    );
+    return template.exercises
+      .filter((exercise) => selectedNames.has(exercise.name))
+      .map((exercise) => ({ ...exercise, defaultSets: Math.min(2, exercise.defaultSets) }));
+  }
+  return template.exercises;
 }

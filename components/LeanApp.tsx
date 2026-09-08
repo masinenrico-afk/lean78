@@ -23,7 +23,7 @@ import {
   daysSinceLastCompletedWorkout
 } from "@/lib/storage";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, TechniqueRating, WorkoutSession } from "@/lib/types";
-import { EXERCISES, REST_SECONDS, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
+import { EXERCISES, REST_SECONDS, exerciseAlternatives, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
 
 type Tab = "home" | "workout" | "history" | "progress" | "coach" | "settings";
 
@@ -197,6 +197,44 @@ export default function LeanApp() {
     await persistTemplateWeights(activeWorkout);
   }
 
+  async function useAlternative(exerciseIndex: number, alternativeName: string) {
+    if (!activeWorkout || !EXERCISES[alternativeName]) return;
+    const session = structuredClone(activeWorkout);
+    const current = session.exercises[exerciseIndex];
+    const originalName = current.name;
+    const definition = EXERCISES[alternativeName];
+    const previous = previousExerciseValues(history, alternativeName);
+    const plannedWeight = previous[0]?.weight ?? definition.defaultWeight;
+    const plannedReps = previous[0]?.reps ?? definition.defaultReps;
+
+    session.exercises[exerciseIndex] = {
+      ...current,
+      name: alternativeName,
+      plannedReps,
+      plannedWeight,
+      sets: Array.from({ length: current.plannedSets }, (_, index) => ({
+        reps: previous[index]?.reps ?? plannedReps,
+        weight: previous[index]?.weight ?? plannedWeight,
+        completed: false
+      })),
+      feedback: {}
+    };
+
+    const nextTemplates = templates.map((template) => template.id !== session.templateId ? template : {
+      ...template,
+      updatedAt: new Date().toISOString(),
+      exercises: template.exercises.map((exercise) => exercise.name !== originalName ? exercise : {
+        ...exercise,
+        name: alternativeName,
+        defaultWeight: plannedWeight,
+        defaultReps: plannedReps
+      })
+    });
+    setTemplates(nextTemplates);
+    await persistActive(session);
+    await Promise.all(nextTemplates.filter((template) => template.id === session.templateId).map((template) => putItem("templates", template)));
+  }
+
   async function persistTemplateWeights(session: WorkoutSession) {
     const nextTemplates = templates.map((template) => {
       if (template.id !== session.templateId) return template;
@@ -313,7 +351,7 @@ export default function LeanApp() {
 
       <div className={`flex-1 px-5 pt-5 ${activeWorkout && timer ? "pb-64" : "pb-40"}`}>
         {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} daysAway={daysAway} onStart={startWorkout} onResume={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
-        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={startWorkout} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
+        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={startWorkout} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onAlternative={useAlternative} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
         {tab === "history" && <HistoryScreen history={history} onReopen={reopenWorkout} />}
         {tab === "progress" && <ProgressScreen history={history} records={records} stats={stats} />}
         {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} daysAway={daysAway} />}
@@ -340,7 +378,7 @@ function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expre
         </div>
       </Panel>
 
-      {daysAway >= 10 && daysAway <= 21 && !activeWorkout && <Panel highlight><p className="text-sm font-black text-accent">Settimana di rientro</p><h3 className="mt-1 text-2xl font-black">Riparti senza rincorrere i numeri.</h3><p className="mt-2 text-sm text-white/65">Sono passati {daysAway} giorni. LeanME userà circa il 90% dei carichi precedenti e più margine.</p></Panel>}
+      {daysAway >= 10 && !activeWorkout && <Panel highlight><p className="text-sm font-black text-accent">Settimana di rientro</p><h3 className="mt-1 text-2xl font-black">Riparti senza rincorrere i numeri.</h3><p className="mt-2 text-sm text-white/65">Sono passati {daysAway} giorni. LeanME userà circa il 90% dei carichi precedenti e più margine.</p></Panel>}
 
       <Panel>
         <p className="text-sm text-white/55">Focus della settimana</p>
@@ -378,7 +416,7 @@ function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expre
 }
 
 function WorkoutScreen(props: any) {
-  const { activeWorkout, history, templates, selectedTemplate, selectedTemplateId, expressMinutes, progress, finishArmed, notificationPermission, onSelectTemplate, onExpress, onStart, onRecovery, onCompleteSet, onSetChange, onSetBlur, onFeedback, onFinish, onDiscard, onEnableNotifications } = props;
+  const { activeWorkout, history, templates, selectedTemplate, selectedTemplateId, expressMinutes, progress, finishArmed, notificationPermission, onSelectTemplate, onExpress, onStart, onRecovery, onCompleteSet, onSetChange, onSetBlur, onFeedback, onAlternative, onFinish, onDiscard, onEnableNotifications } = props;
   return (
     <section className="space-y-5">
       {!activeWorkout && (
@@ -412,12 +450,13 @@ function WorkoutScreen(props: any) {
           {activeWorkout.exercises.map((exercise: WorkoutSession["exercises"][number], exerciseIndex: number) => {
             const definition = EXERCISES[exercise.name];
             const previous = previousExerciseValues(history, exercise.name);
-            const suggestedWeight = suggestedWeightForExercise(history, exercise.name);
+            const suggestedWeight = activeWorkout.returnFromBreak ? undefined : suggestedWeightForExercise(history, exercise.name);
             const decision = progressionForExercise(history, exercise, activeWorkout.recovery, activeWorkout.returnFromBreak);
+            const alternatives = exerciseAlternatives(exercise.name);
             return (
               <Panel key={exercise.name}>
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">Tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Puoi considerare: {formatNumber(suggestedWeight)}kg</p>}</div>
+                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">{exercise.plannedSets} serie · {definition.repRange} reps · tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{alternatives.length > 0 && <select className="mt-2 min-h-9 max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 text-xs font-bold text-white" defaultValue="" onChange={(event) => { if (event.target.value) onAlternative(exerciseIndex, event.target.value); }}><option value="">Usa un'alternativa oggi</option>{alternatives.map((alternative) => <option key={alternative} value={alternative}>{alternative}</option>)}</select>}{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Puoi considerare: {formatNumber(suggestedWeight)}kg</p>}</div>
                   <Chip>{stateLabel(decision.state)}</Chip>
                 </div>
                 <div className="space-y-2">{exercise.sets.map((set, setIndex) => <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField decimals label="kg" value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
@@ -451,7 +490,7 @@ function ProgressScreen({ history, records, stats }: any) {
 function CoachScreen({ history, goals, progressions, daysAway }: any) {
   const last = history[0];
   const top = progressions[0];
-  return <section className="space-y-5"><Panel highlight><p className="text-sm text-white/55">Coach</p><h2 className="mt-1 text-3xl font-black">{daysAway >= 10 && daysAway <= 21 ? "Rientro tranquillo." : "Pronto quando vuoi."}</h2><p className="mt-2 text-sm text-white/65">{daysAway >= 10 && daysAway <= 21 ? "La performance precedente è salva. Oggi conta ritrovare ritmo." : "Il piano è semplice: muoviti bene, poi progredisci."}</p></Panel>{top && <Panel><p className="text-sm text-white/55">Raccomandazione di oggi</p><h2 className="mt-1 text-2xl font-black text-accent">{top.exercise}</h2><div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Stato" value={stateLabel(top.state)} /><MiniMetric label="Azione" value={top.label} /></div><p className="mt-3 text-sm text-white/65"><span className="font-black text-white">Perché: </span>{top.why}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa fare: </span>{top.doThis}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa evitare: </span>{top.avoid}</p></Panel>}<Panel><p className="font-black">Questa settimana</p><div className="mt-3 space-y-2">{goals.map((goal: string) => <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm" key={goal}>{goal}</p>)}</div></Panel>{last?.coachSummary && <Panel><p className="font-black">Riepilogo ultimo allenamento</p><div className="mt-3 space-y-2">{last.coachSummary.map((line: string) => <p className="text-sm text-white/65" key={line}>{line}</p>)}</div></Panel>}<Panel><p className="font-black">Suggerimenti progressione</p><div className="mt-3 space-y-2">{progressions.slice(0, 5).map((item: any) => <div key={item.exercise} className="rounded-xl bg-white/[0.05] p-3"><p className="font-bold text-accent">{item.exercise}: {stateLabel(item.state)} · {item.label}</p><p className="mt-1 text-sm text-white/55">{item.detail}</p></div>)}</div></Panel></section>;
+  return <section className="space-y-5"><Panel highlight><p className="text-sm text-white/55">Coach</p><h2 className="mt-1 text-3xl font-black">{daysAway >= 10 ? "Rientro tranquillo." : "Pronto quando vuoi."}</h2><p className="mt-2 text-sm text-white/65">{daysAway >= 10 ? "La performance precedente è salva. Oggi conta ritrovare ritmo." : "Il piano è semplice: muoviti bene, poi progredisci."}</p></Panel>{top && <Panel><p className="text-sm text-white/55">Raccomandazione di oggi</p><h2 className="mt-1 text-2xl font-black text-accent">{top.exercise}</h2><div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Stato" value={stateLabel(top.state)} /><MiniMetric label="Azione" value={top.label} /></div><p className="mt-3 text-sm text-white/65"><span className="font-black text-white">Perché: </span>{top.why}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa fare: </span>{top.doThis}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa evitare: </span>{top.avoid}</p></Panel>}<Panel><p className="font-black">Questa settimana</p><div className="mt-3 space-y-2">{goals.map((goal: string) => <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm" key={goal}>{goal}</p>)}</div></Panel>{last?.coachSummary && <Panel><p className="font-black">Riepilogo ultimo allenamento</p><div className="mt-3 space-y-2">{last.coachSummary.map((line: string) => <p className="text-sm text-white/65" key={line}>{line}</p>)}</div></Panel>}<Panel><p className="font-black">Suggerimenti progressione</p><div className="mt-3 space-y-2">{progressions.slice(0, 5).map((item: any) => <div key={item.exercise} className="rounded-xl bg-white/[0.05] p-3"><p className="font-bold text-accent">{item.exercise}: {stateLabel(item.state)} · {item.label}</p><p className="mt-1 text-sm text-white/55">{item.detail}</p></div>)}</div></Panel></section>;
 }
 
 function SettingsScreen({ settings, importPreview, history, onSettings, onBackup, onImportFile, onConfirmImport, onCancelImport }: any) {
