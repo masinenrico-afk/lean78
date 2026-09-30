@@ -40,7 +40,8 @@ LeanME è una Progressive Web App per iPhone, offline-first, pensata come un com
 
 ## Durata e progressione
 
-- 60 minuti mantiene il programma completo; 45 minuti conserva le famiglie muscolari presenti nel template e porta le serie a due quando possibile.
+- 60 minuti mantiene il programma completo; 45 minuti conserva le famiglie muscolari presenti nel template e comprime in modo selettivo serie, accessori e ridondanze.
+- Il riferimento da 60 minuti usa serie specifiche per esercizio (da 1 a 4); il compressore da 45 minuti riduce prima ridondanze e lavoro accessorio, senza una regola globale di due serie.
 - 30 minuti privilegia i movimenti principali; 90 minuti lascia spazio a volume accessorio e lavoro tecnico senza imporli.
 - Il carico viene suggerito solo dopo due prestazioni stabili allo stesso peso, con tecnica adeguata, RPE non alto, RIR sufficiente e recupero valido.
 - Dopo almeno 10 giorni di pausa, il primo allenamento parte intorno al 90% del precedente e non propone record.

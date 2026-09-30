@@ -1,6 +1,18 @@
 export type ExerciseKind = "compound" | "machine" | "isolation" | "abs";
 export type TemplateId = "day-a" | "day-b" | "day-c";
 export type Tempo = "3-0-1" | "4-1-1" | "2-1-2";
+export type ExerciseRole = "primary" | "secondary" | "accessory" | "core";
+export type FatigueCost = "low" | "medium" | "high";
+
+export type SetAllocationProfile = {
+  role: ExerciseRole;
+  fatigueCost: FatigueCost;
+  technicalDemand: "low" | "medium" | "high";
+  movementPattern: string;
+  redundancyGroup?: string;
+  minSets: 1 | 2;
+  supersetCompatible?: boolean;
+};
 
 export type ExerciseDefinition = {
   name: string;
@@ -13,6 +25,7 @@ export type ExerciseDefinition = {
   repRange: string;
   defaultWeight: number;
   increment: number;
+  allocation?: SetAllocationProfile;
   tempo?: Tempo;
   holdSeconds?: number;
   warmup?: boolean;
@@ -36,6 +49,11 @@ export type WorkoutTemplate = {
   updatedAt: string;
 };
 
+type TemplateBlueprintExercise = {
+  name: string;
+  defaultSets: number;
+};
+
 export const ACCENT = "#00D9FF";
 
 export const REST_SECONDS: Record<ExerciseKind, number> = {
@@ -46,21 +64,22 @@ export const REST_SECONDS: Record<ExerciseKind, number> = {
 };
 
 export const EXERCISES: Record<string, ExerciseDefinition> = {
-  "Leg Press": { name: "Leg Press", kind: "compound", focus: "legs", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 100, increment: 10, tempo: "3-0-1" },
-  "Calf Raises": { name: "Calf Raises", kind: "isolation", focus: "legs", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 20, increment: 2.5, tempo: "2-1-2" },
-  "Chest Press": { name: "Chest Press", kind: "machine", focus: "chest", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 1.25, tempo: "3-0-1", holdSeconds: 1 },
-  "Lat Machine": { name: "Lat Machine", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 35, increment: 2.5, tempo: "3-0-1", holdSeconds: 2 },
-  "Shoulder Press": { name: "Shoulder Press", kind: "machine", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 15, increment: 1.25, tempo: "3-0-1" },
+  "Leg Press": { name: "Leg Press", kind: "compound", focus: "legs", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 100, increment: 10, tempo: "3-0-1", allocation: { role: "primary", fatigueCost: "high", technicalDemand: "medium", movementPattern: "knee-dominant", redundancyGroup: "knee-dominant", minSets: 2 } },
+  "Calf Raises": { name: "Calf Raises", kind: "isolation", focus: "legs", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 20, increment: 2.5, tempo: "2-1-2", allocation: { role: "secondary", fatigueCost: "low", technicalDemand: "low", movementPattern: "ankle-extension", minSets: 1, supersetCompatible: true } },
+  "Chest Press": { name: "Chest Press", kind: "machine", focus: "chest", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 1.25, tempo: "3-0-1", holdSeconds: 1, allocation: { role: "primary", fatigueCost: "medium", technicalDemand: "medium", movementPattern: "horizontal-push", redundancyGroup: "horizontal-push", minSets: 2 } },
+  "Lat Machine": { name: "Lat Machine", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "6-10", defaultWeight: 35, increment: 2.5, tempo: "3-0-1", holdSeconds: 2, allocation: { role: "primary", fatigueCost: "medium", technicalDemand: "medium", movementPattern: "vertical-pull", redundancyGroup: "vertical-pull", minSets: 2 } },
+  "Shoulder Press": { name: "Shoulder Press", kind: "machine", focus: "shoulders", priority: "medium", defaultSets: 2, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 15, increment: 1.25, tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "medium", movementPattern: "vertical-push", minSets: 1 } },
   "Lateral Raises": { name: "Lateral Raises", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 3, increment: 1, tempo: "2-1-2", holdSeconds: 2 },
-  "Triceps Pushdown": { name: "Triceps Pushdown", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" },
-  "Crunch Machine": { name: "Crunch Machine", kind: "abs", focus: "core", priority: "low", defaultSets: 3, defaultReps: 12, repTarget: 20, repRange: "12-20", defaultWeight: 60, increment: 2.5, tempo: "2-1-2" },
-  "Hack Squat": { name: "Hack Squat", kind: "compound", focus: "legs", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 40, increment: 10, tempo: "3-0-1" },
+  "Triceps Pushdown": { name: "Triceps Pushdown", kind: "isolation", focus: "arms", priority: "low", defaultSets: 2, defaultReps: 10, repTarget: 15, repRange: "8-12", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2", allocation: { role: "accessory", fatigueCost: "low", technicalDemand: "low", movementPattern: "elbow-extension", minSets: 1, supersetCompatible: true } },
+  "Crunch Machine": { name: "Crunch Machine", kind: "abs", focus: "core", priority: "low", defaultSets: 2, defaultReps: 12, repTarget: 15, repRange: "10-15", defaultWeight: 60, increment: 2.5, tempo: "2-1-2", allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "trunk-flexion", minSets: 1, supersetCompatible: true } },
+  "Hack Squat": { name: "Hack Squat", kind: "compound", focus: "legs", priority: "high", defaultSets: 4, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 40, increment: 10, tempo: "3-0-1", allocation: { role: "primary", fatigueCost: "high", technicalDemand: "high", movementPattern: "knee-dominant", redundancyGroup: "knee-dominant", minSets: 2 } },
   "Pulley Row": { name: "Pulley Row", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 45, increment: 2.5, tempo: "3-0-1" },
-  "Assisted Pull Ups": { name: "Assisted Pull Ups", kind: "machine", focus: "back", priority: "medium", defaultSets: 3, defaultReps: 6, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
-  "Leg Curl": { name: "Leg Curl", kind: "machine", focus: "legs", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
-  "Dumbbell Curl": { name: "Dumbbell Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 8, increment: 1.25, tempo: "2-1-2" },
+  "Assisted Pull Ups": { name: "Assisted Pull Ups", kind: "machine", focus: "back", priority: "medium", defaultSets: 2, defaultReps: 6, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 2.5, tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "high", movementPattern: "vertical-pull", redundancyGroup: "vertical-pull", minSets: 1 } },
+  "Leg Curl": { name: "Leg Curl", kind: "machine", focus: "legs", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 12, repRange: "8-12", defaultWeight: 30, increment: 2.5, tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "low", movementPattern: "knee-flexion", redundancyGroup: "hamstrings", minSets: 1 } },
+  "Dumbbell Curl": { name: "Dumbbell Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "8-12", defaultWeight: 8, increment: 1.25, tempo: "2-1-2", allocation: { role: "accessory", fatigueCost: "low", technicalDemand: "low", movementPattern: "elbow-flexion", minSets: 1, supersetCompatible: true } },
   "Face Pull": { name: "Face Pull", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2", holdSeconds: 1, warmup: true },
-  "Hammer Curl": { name: "Hammer Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 10, increment: 1.25, tempo: "2-1-2" },
+  "Hammer Curl": { name: "Hammer Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 2, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 10, increment: 1.25, tempo: "2-1-2", allocation: { role: "accessory", fatigueCost: "low", technicalDemand: "low", movementPattern: "elbow-flexion", minSets: 1, supersetCompatible: true } },
+  "Romanian Deadlift": { name: "Romanian Deadlift", kind: "compound", focus: "legs", priority: "high", defaultSets: 2, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 2.5, tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "high", technicalDemand: "high", movementPattern: "hip-hinge", minSets: 1 } },
   "Standing Calf Raise": { name: "Standing Calf Raise", kind: "isolation", focus: "legs", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 20, increment: 2.5, tempo: "2-1-2" },
   "Dumbbell Chest Press": { name: "Dumbbell Chest Press", kind: "compound", focus: "chest", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 12.5, increment: 1.25, tempo: "3-0-1" },
   "Dumbbell Shoulder Press": { name: "Dumbbell Shoulder Press", kind: "compound", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 8, increment: 1.25, tempo: "3-0-1" },
@@ -107,24 +126,45 @@ export function exerciseAlternatives(name: string) {
   return ALTERNATIVES[name] ?? [];
 }
 
-const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission: string; weeklyFocus: string; exercises: string[] }> = {
+const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission: string; weeklyFocus: string; exercises: TemplateBlueprintExercise[] }> = {
   "day-a": {
     name: "DAY A",
-    mission: "Costruisci spinta controllata e forza stabile.",
-    weeklyFocus: "Tempo fluido, range completo, ripetizioni calme.",
-    exercises: ["Leg Press", "Calf Raises", "Chest Press", "Lat Machine", "Shoulder Press", "Lateral Raises", "Triceps Pushdown", "Crunch Machine"]
+    mission: "Upper: spinta e tirata solide, senza fretta.",
+    weeklyFocus: "Petto, schiena, spalle e braccia con esecuzione pulita.",
+    exercises: [
+      { name: "Chest Press", defaultSets: 3 },
+      { name: "Lat Machine", defaultSets: 3 },
+      { name: "Dumbbell Shoulder Press", defaultSets: 2 },
+      { name: "Assisted Pull Ups", defaultSets: 2 },
+      { name: "Dumbbell Curl", defaultSets: 2 },
+      { name: "Triceps Pushdown", defaultSets: 2 }
+    ]
   },
   "day-b": {
     name: "DAY B",
-    mission: "Allena gambe forti e tirate stabili senza fretta di aumentare.",
-    weeklyFocus: "Spalle stabili e tirate pulite.",
-    exercises: ["Hack Squat", "Chest Press", "Pulley Row", "Assisted Pull Ups", "Leg Curl", "Dumbbell Curl", "Crunch Machine"]
+    mission: "Lower: gambe forti, posterior chain controllata.",
+    weeklyFocus: "Knee-dominant, femorali, polpacci e core.",
+    exercises: [
+      { name: "Hack Squat", defaultSets: 4 },
+      { name: "Leg Curl", defaultSets: 3 },
+      { name: "Romanian Deadlift", defaultSets: 2 },
+      { name: "Calf Raises", defaultSets: 3 },
+      { name: "Crunch Machine", defaultSets: 2 }
+    ]
   },
   "day-c": {
     name: "DAY C",
-    mission: "Pratica controllo completo con volume amico delle spalle.",
-    weeklyFocus: "Mobilita toracica e isolamento paziente.",
-    exercises: ["Leg Press", "Calf Raises", "Lat Machine", "Pulley Row", "Chest Press", "Shoulder Press", "Lateral Raises", "Face Pull", "Triceps Pushdown", "Hammer Curl", "Crunch Machine"]
+    mission: "Full body: stimolo completo, fatica gestibile.",
+    weeklyFocus: "Spinta, tirata, gambe, spalle, braccia e core.",
+    exercises: [
+      { name: "Chest Press", defaultSets: 2 },
+      { name: "Lat Machine", defaultSets: 2 },
+      { name: "Leg Press", defaultSets: 3 },
+      { name: "Leg Curl", defaultSets: 2 },
+      { name: "Dumbbell Shoulder Press", defaultSets: 2 },
+      { name: "Dumbbell Curl", defaultSets: 1 },
+      { name: "Crunch Machine", defaultSets: 2 }
+    ]
   }
 };
 
@@ -137,11 +177,11 @@ export function createDefaultTemplates(): WorkoutTemplate[] {
     weeklyFocus: TEMPLATE_DATA[id].weeklyFocus,
     createdAt: now,
     updatedAt: now,
-    exercises: TEMPLATE_DATA[id].exercises.map((name) => {
-      const exercise = EXERCISES[name];
+    exercises: TEMPLATE_DATA[id].exercises.map((entry) => {
+      const exercise = EXERCISES[entry.name];
       return {
-        name,
-        defaultSets: exercise.defaultSets,
+        name: entry.name,
+        defaultSets: entry.defaultSets,
         defaultReps: exercise.defaultReps,
         defaultWeight: exercise.defaultWeight,
         priority: exercise.priority
@@ -159,21 +199,81 @@ export function getNextTemplate(templates: WorkoutTemplate[], lastTemplateId?: T
 }
 
 export function expressExercises(template: WorkoutTemplate, minutes: number) {
-  if (minutes >= 60) return template.exercises;
-  const required = template.exercises.filter((exercise) => exercise.priority === "high");
-  if (minutes <= 30) return [...required, ...template.exercises.filter((exercise) => exercise.priority === "medium").slice(0, 1)];
-  if (minutes <= 45) {
-    const focusOrder: ExerciseDefinition["focus"][] = ["legs", "chest", "back", "shoulders", "arms", "core"];
-    const selectedNames = new Set(
-      focusOrder.flatMap((focus) => {
-        const candidates = template.exercises.filter((exercise) => EXERCISES[exercise.name]?.focus === focus);
-        const preferred = candidates.find((exercise) => exercise.priority === "high") ?? candidates.find((exercise) => exercise.priority === "medium") ?? candidates[0];
-        return preferred ? [preferred.name] : [];
-      })
-    );
-    return template.exercises
-      .filter((exercise) => selectedNames.has(exercise.name))
-      .map((exercise) => ({ ...exercise, defaultSets: Math.min(2, exercise.defaultSets) }));
+  const reference = template.exercises.map((exercise) => ({ ...exercise }));
+  if (minutes >= 60) return reference;
+  if (minutes <= 30) return allocateCompressedWorkout(reference, 0.58, true);
+  return allocateCompressedWorkout(reference, 0.8, false);
+}
+
+function allocateCompressedWorkout(reference: TemplateExercise[], ratio: number, compact: boolean) {
+  const minimumCoverage = compact ? selectMajorMovementCoverage(reference) : reference;
+  const exercises = removeRedundancy(minimumCoverage).map((exercise) => ({ ...exercise }));
+  const referenceSets = exercises.reduce((total, exercise) => total + exercise.defaultSets, 0);
+  const minimumSets = exercises.reduce((total, exercise) => total + allocationFor(exercise.name).minSets, 0);
+  const targetSets = Math.max(minimumSets, Math.round(referenceSets * ratio));
+
+  while (exercises.reduce((total, exercise) => total + exercise.defaultSets, 0) > targetSets) {
+    const candidate = exercises
+      .filter((exercise) => exercise.defaultSets > allocationFor(exercise.name).minSets)
+      .sort((left, right) => compressionPriority(left) - compressionPriority(right))[0];
+    if (!candidate) break;
+    candidate.defaultSets -= 1;
   }
-  return template.exercises;
+
+  return exercises;
+}
+
+function selectMajorMovementCoverage(exercises: TemplateExercise[]) {
+  const selected = new Set<string>();
+  const selectedPatterns = new Set<string>();
+  const include = (exercise: TemplateExercise) => {
+    selected.add(exercise.name);
+    selectedPatterns.add(allocationFor(exercise.name).movementPattern);
+  };
+  for (const exercise of exercises) {
+    const profile = allocationFor(exercise.name);
+    if (profile.role === "primary") include(exercise);
+  }
+  for (const focus of ["chest", "back", "legs", "shoulders", "arms", "core"] as ExerciseDefinition["focus"][]) {
+    const candidate = exercises.find((exercise) => EXERCISES[exercise.name]?.focus === focus);
+    if (candidate) include(candidate);
+  }
+  for (const exercise of exercises) {
+    const profile = allocationFor(exercise.name);
+    if (profile.role === "secondary" && !selectedPatterns.has(profile.movementPattern)) include(exercise);
+  }
+  return exercises.filter((exercise) => selected.has(exercise.name));
+}
+
+function removeRedundancy(exercises: TemplateExercise[]) {
+  const seenGroups = new Set<string>();
+  return exercises.filter((exercise) => {
+    const profile = allocationFor(exercise.name);
+    const group = profile.redundancyGroup;
+    if (!group || !seenGroups.has(group)) {
+      if (group) seenGroups.add(group);
+      return true;
+    }
+    return profile.role === "primary";
+  });
+}
+
+function compressionPriority(exercise: TemplateExercise) {
+  const profile = allocationFor(exercise.name);
+  const roleScore: Record<ExerciseRole, number> = { accessory: 0, core: 1, secondary: 2, primary: 3 };
+  const fatigueScore: Record<FatigueCost, number> = { low: 0, medium: 1, high: 2 };
+  return roleScore[profile.role] * 10 + fatigueScore[profile.fatigueCost];
+}
+
+function allocationFor(name: string): SetAllocationProfile {
+  const definition = EXERCISES[name];
+  if (definition?.allocation) return definition.allocation;
+  return {
+    role: definition?.priority === "high" ? "primary" : definition?.priority === "medium" ? "secondary" : definition?.kind === "abs" ? "core" : "accessory",
+    fatigueCost: definition?.kind === "compound" ? "high" : definition?.kind === "machine" ? "medium" : "low",
+    technicalDemand: definition?.kind === "compound" ? "medium" : "low",
+    movementPattern: definition?.focus ?? "general",
+    minSets: definition?.priority === "high" ? 2 : 1,
+    supersetCompatible: definition?.kind === "isolation" || definition?.kind === "abs"
+  };
 }

@@ -161,6 +161,15 @@ async function readLegacyStore<T>(storeName: "workouts" | "templates") {
 function normalizeLegacyTemplate(template: Partial<WorkoutTemplate>, defaults: WorkoutTemplate[]): WorkoutTemplate {
   const fallback = defaults.find((item) => item.id === template.id) ?? defaults[0];
   const now = new Date().toISOString();
+  const legacyExercises = template.exercises as Array<{
+    name: string;
+    defaultSets?: number;
+    defaultReps?: number;
+    defaultWeight?: number;
+    targetSets?: number;
+    targetReps?: number;
+    weight?: number;
+  }> | undefined;
   return {
     ...fallback,
     ...template,
@@ -170,17 +179,18 @@ function normalizeLegacyTemplate(template: Partial<WorkoutTemplate>, defaults: W
     weeklyFocus: template.weeklyFocus ?? fallback.weeklyFocus,
     createdAt: template.createdAt ?? fallback.createdAt ?? now,
     updatedAt: template.updatedAt ?? now,
-    exercises: fallback.exercises.map((defaultExercise) => {
-      const legacyExercise = template.exercises?.find((exercise) => exercise.name === defaultExercise.name) as
-        | { weight?: number; targetSets?: number; targetReps?: number }
-        | undefined;
-      return {
-        ...defaultExercise,
-        defaultSets: legacyExercise?.targetSets ?? defaultExercise.defaultSets,
-        defaultReps: legacyExercise?.targetReps ?? defaultExercise.defaultReps,
-        defaultWeight: legacyExercise?.weight ?? defaultExercise.defaultWeight
-      };
-    })
+    exercises: legacyExercises?.length
+      ? legacyExercises.map((legacyExercise) => {
+        const definition = EXERCISES[legacyExercise.name];
+        return {
+          name: legacyExercise.name,
+          defaultSets: legacyExercise.defaultSets ?? legacyExercise.targetSets ?? definition?.defaultSets ?? 3,
+          defaultReps: legacyExercise.defaultReps ?? legacyExercise.targetReps ?? definition?.defaultReps ?? 8,
+          defaultWeight: legacyExercise.defaultWeight ?? legacyExercise.weight ?? definition?.defaultWeight ?? 0,
+          priority: definition?.priority ?? "medium"
+        };
+      })
+      : fallback.exercises
   };
 }
 
