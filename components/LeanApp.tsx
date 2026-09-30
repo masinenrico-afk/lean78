@@ -24,7 +24,7 @@ import {
   daysSinceLastCompletedWorkout
 } from "@/lib/storage";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, TechniqueRating, WorkoutSession } from "@/lib/types";
-import { EXERCISES, REST_SECONDS, exerciseAlternatives, exerciseId, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
+import { EXERCISES, PROGRAM_VERSION, REST_SECONDS, exerciseAlternatives, exerciseId, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
 
 type Tab = "home" | "workout" | "history" | "progress" | "coach" | "settings";
 
@@ -116,9 +116,9 @@ export default function LeanApp() {
   const needsBackup = !settings.lastBackupAt || daysBetween(settings.lastBackupAt, new Date().toISOString()) >= 30;
   const daysAway = daysSinceLastCompletedWorkout(history);
 
-  async function startWorkout() {
-    if (!nextTemplate) return;
-    const session = createWorkout(settings.autopilot ? nextTemplate : selectedTemplate, expressMinutes, history);
+  async function startWorkout(template = selectedTemplate) {
+    if (!template) return;
+    const session = createWorkout(template, expressMinutes, history);
     session.recovery = { sleep: 3, energy: 3, soreness: 3, createdAt: new Date().toISOString() };
     setActiveWorkout(session);
     setSelectedTemplateId(session.templateId);
@@ -275,7 +275,7 @@ export default function LeanApp() {
 
   async function adoptNewProgram() {
     if (activeWorkout) return;
-    const alreadyActive = templates.length === 3 && templates.every((template) => template.programVersion === 2);
+    const alreadyActive = templates.length === 3 && templates.every((template) => template.programVersion === PROGRAM_VERSION);
     if (alreadyActive) {
       setProgramMigrationMessage("Nuova programmazione attiva");
       return;
@@ -366,12 +366,12 @@ export default function LeanApp() {
       </header>
 
       <div className={`flex-1 px-5 pt-5 ${activeWorkout && timer ? "pb-64" : "pb-40"}`}>
-        {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} daysAway={daysAway} onStart={startWorkout} onResume={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
-        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={startWorkout} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onAlternative={useAlternative} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
+        {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} daysAway={daysAway} onStart={() => startWorkout(nextTemplate)} onResume={() => setTab("workout")} onChooseWorkout={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
+        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={() => startWorkout(selectedTemplate)} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onAlternative={useAlternative} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
         {tab === "history" && <HistoryScreen history={history} onReopen={reopenWorkout} />}
         {tab === "progress" && <ProgressScreen history={history} records={records} stats={stats} />}
         {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} daysAway={daysAway} />}
-        {tab === "settings" && <SettingsScreen settings={settings} importPreview={importPreview} history={history} activeWorkout={activeWorkout} programActive={templates.length === 3 && templates.every((template) => template.programVersion === 2)} programMigrationMessage={programMigrationMessage} onAdoptProgram={adoptNewProgram} onSettings={updateSettings} onBackup={downloadBackup} onImportFile={onImportFile} onConfirmImport={confirmImport} onCancelImport={() => setImportPreview(null)} />}
+        {tab === "settings" && <SettingsScreen settings={settings} importPreview={importPreview} history={history} activeWorkout={activeWorkout} programActive={templates.length === 3 && templates.every((template) => template.programVersion === PROGRAM_VERSION)} programMigrationMessage={programMigrationMessage} onAdoptProgram={adoptNewProgram} onSettings={updateSettings} onBackup={downloadBackup} onImportFile={onImportFile} onConfirmImport={confirmImport} onCancelImport={() => setImportPreview(null)} />}
       </div>
 
       {activeWorkout && timer && <FixedTimerBadge timer={timer} remaining={timerRemaining} onToggle={toggleTimer} onAdjust={adjustTimer} onClose={closeTimer} />}
@@ -380,7 +380,7 @@ export default function LeanApp() {
   );
 }
 
-function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expressMinutes, setExpressMinutes, needsBackup, daysAway, onStart, onResume, onBackup, onLater }: any) {
+function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expressMinutes, setExpressMinutes, needsBackup, daysAway, onStart, onResume, onChooseWorkout, onBackup, onLater }: any) {
   return (
     <section className="space-y-5">
       <Panel highlight>
@@ -392,6 +392,7 @@ function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expre
           </div>
           <button className="min-h-14 rounded-xl bg-white px-5 font-black text-ink" onClick={activeWorkout ? onResume : onStart}>{activeWorkout ? "Riprendi" : "Inizia"}</button>
         </div>
+        {!activeWorkout && <button className="mt-3 min-h-10 text-sm font-black text-accent" onClick={onChooseWorkout}>Scegli allenamento</button>}
       </Panel>
 
       {daysAway >= 10 && !activeWorkout && <Panel highlight><p className="text-sm font-black text-accent">Settimana di rientro</p><h3 className="mt-1 text-2xl font-black">Riparti senza rincorrere i numeri.</h3><p className="mt-2 text-sm text-white/65">Sono passati {daysAway} giorni. LeanME userà circa il 90% dei carichi precedenti e più margine.</p></Panel>}

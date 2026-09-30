@@ -4,7 +4,7 @@ import { recoveryStatus } from "./recoveryEngine";
 import type { WorkoutSession } from "./types";
 
 export function warmupAdvice(templateName: string) {
-  if (templateName === "DAY A" || templateName === "DAY C") {
+  if (templateName === "DAY A" || templateName === "DAY C" || templateName === "Upper" || templateName === "Full Body") {
     return ["Cat Camel", "Rotazioni toraciche", "Wall Slides", "Face Pull"];
   }
   return ["Cat Camel", "Rotazioni toraciche", "Wall Slides"];

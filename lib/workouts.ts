@@ -42,7 +42,7 @@ export type TemplateExercise = {
 
 export type WorkoutTemplate = {
   id: TemplateId;
-  name: "DAY A" | "DAY B" | "DAY C";
+  name: "DAY A" | "DAY B" | "DAY C" | "Upper" | "Lower" | "Full Body";
   mission: string;
   weeklyFocus: string;
   exercises: TemplateExercise[];
@@ -57,7 +57,7 @@ type TemplateBlueprintExercise = {
   supersetGroup?: string;
 };
 
-export const PROGRAM_VERSION = 2;
+export const PROGRAM_VERSION = 3;
 
 export function exerciseId(name: string) {
   return `exercise:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
@@ -137,7 +137,7 @@ export function exerciseAlternatives(name: string) {
 
 const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission: string; weeklyFocus: string; exercises: TemplateBlueprintExercise[] }> = {
   "day-a": {
-    name: "DAY A",
+    name: "Upper",
     mission: "Upper: spinta e tirata solide, senza fretta.",
     weeklyFocus: "Petto, schiena, spalle e braccia con esecuzione pulita.",
     exercises: [
@@ -150,7 +150,7 @@ const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission
     ]
   },
   "day-b": {
-    name: "DAY B",
+    name: "Lower",
     mission: "Lower: gambe forti, posterior chain controllata.",
     weeklyFocus: "Knee-dominant, femorali, polpacci e core.",
     exercises: [
@@ -162,7 +162,7 @@ const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission
     ]
   },
   "day-c": {
-    name: "DAY C",
+    name: "Full Body",
     mission: "Full body: stimolo completo, fatica gestibile.",
     weeklyFocus: "Spinta, tirata, gambe, spalle, braccia e core.",
     exercises: [
