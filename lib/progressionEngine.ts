@@ -25,7 +25,6 @@ export function progressionForExercise(history: WorkoutSession[], exercise: Work
   const completed = exercise.sets.filter((set) => set.completed);
   const technique = exercise.feedback.technique;
   const rpe = exercise.feedback.rpe ?? 7;
-  const rir = exercise.feedback.rir;
   const previous = previousExercise(history, exercise.name);
   const previousSets = previous?.sets.filter((set) => set.completed) ?? [];
   const currentWeight = completed.length ? Math.max(...completed.map((set) => set.weight)) : exercise.plannedWeight;
@@ -34,7 +33,7 @@ export function progressionForExercise(history: WorkoutSession[], exercise: Work
   const previousReachedTopReps = previousSets.length >= definition.defaultSets && previousSets.slice(0, definition.defaultSets).every((set) => set.reps >= definition.repTarget);
   const sameLoadAsPrevious = previousWeight !== undefined && Math.abs(currentWeight - previousWeight) < 0.01;
   const goodTechnique = technique === "Perfetta" || technique === "Buona" || !technique;
-  const enoughInReserve = rir === undefined ? rpe <= 8 : rir >= 1;
+  const enoughInReserve = rpe <= 8;
 
   if (shouldMaintainLoad(recovery)) {
     return decision(exercise.name, "CONSOLIDATING", "Mantieni", "Recupero basso. Tieni lo stesso carico e rendi le ripetizioni fluide.", "Sonno, energia o dolori suggeriscono una giornata di mantenimento.", "Qualità e controllo.", "Non aumentare solo per chiudere il numero.");

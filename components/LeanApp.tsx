@@ -8,6 +8,7 @@ import { progressionForExercise, workoutProgressions } from "@/lib/progressionEn
 import { recoveryScore, recoveryStatus } from "@/lib/recoveryEngine";
 import {
   completeWorkout,
+  adoptReferenceProgram,
   createWorkout,
   deleteItem,
   exportBackup,
@@ -23,7 +24,7 @@ import {
   daysSinceLastCompletedWorkout
 } from "@/lib/storage";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, TechniqueRating, WorkoutSession } from "@/lib/types";
-import { EXERCISES, REST_SECONDS, exerciseAlternatives, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
+import { EXERCISES, REST_SECONDS, exerciseAlternatives, exerciseId, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
 
 type Tab = "home" | "workout" | "history" | "progress" | "coach" | "settings";
 
@@ -43,6 +44,7 @@ export default function LeanApp() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
   const [importPreview, setImportPreview] = useState<ReturnType<typeof previewBackup>>(null);
   const [finishArmed, setFinishArmed] = useState(false);
+  const [programMigrationMessage, setProgramMigrationMessage] = useState("");
   const importPayload = useRef<LeanBackup | null>(null);
 
   useEffect(() => {
@@ -210,6 +212,7 @@ export default function LeanApp() {
     session.exercises[exerciseIndex] = {
       ...current,
       name: alternativeName,
+      exerciseId: exerciseId(alternativeName),
       plannedReps,
       plannedWeight,
       sets: Array.from({ length: current.plannedSets }, (_, index) => ({
@@ -258,7 +261,7 @@ export default function LeanApp() {
     await persistActive(session);
   }
 
-  async function setFeedback(exerciseIndex: number, field: "technique" | "rpe" | "rir" | "notes", value: string | number) {
+  async function setFeedback(exerciseIndex: number, field: "technique" | "rpe" | "notes", value: string | number) {
     if (!activeWorkout) return;
     const session = structuredClone(activeWorkout);
     session.exercises[exerciseIndex].feedback = { ...session.exercises[exerciseIndex].feedback, [field]: value };
@@ -268,6 +271,19 @@ export default function LeanApp() {
   async function updateSettings(next: AppSettings) {
     setSettings(next);
     await putItem("settings", next);
+  }
+
+  async function adoptNewProgram() {
+    if (activeWorkout) return;
+    const alreadyActive = templates.length === 3 && templates.every((template) => template.programVersion === 2);
+    if (alreadyActive) {
+      setProgramMigrationMessage("Nuova programmazione attiva");
+      return;
+    }
+    const nextTemplates = await adoptReferenceProgram(templates);
+    setTemplates(nextTemplates);
+    setSelectedTemplateId("day-a");
+    setProgramMigrationMessage("Nuova programmazione attiva. Allenamenti, pesi e record sono stati mantenuti.");
   }
 
   async function startRestTimer(exercise: string, durationSeconds: number) {
@@ -355,7 +371,7 @@ export default function LeanApp() {
         {tab === "history" && <HistoryScreen history={history} onReopen={reopenWorkout} />}
         {tab === "progress" && <ProgressScreen history={history} records={records} stats={stats} />}
         {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} daysAway={daysAway} />}
-        {tab === "settings" && <SettingsScreen settings={settings} importPreview={importPreview} history={history} onSettings={updateSettings} onBackup={downloadBackup} onImportFile={onImportFile} onConfirmImport={confirmImport} onCancelImport={() => setImportPreview(null)} />}
+        {tab === "settings" && <SettingsScreen settings={settings} importPreview={importPreview} history={history} activeWorkout={activeWorkout} programActive={templates.length === 3 && templates.every((template) => template.programVersion === 2)} programMigrationMessage={programMigrationMessage} onAdoptProgram={adoptNewProgram} onSettings={updateSettings} onBackup={downloadBackup} onImportFile={onImportFile} onConfirmImport={confirmImport} onCancelImport={() => setImportPreview(null)} />}
       </div>
 
       {activeWorkout && timer && <FixedTimerBadge timer={timer} remaining={timerRemaining} onToggle={toggleTimer} onAdjust={adjustTimer} onClose={closeTimer} />}
@@ -453,14 +469,15 @@ function WorkoutScreen(props: any) {
             const suggestedWeight = activeWorkout.returnFromBreak ? undefined : suggestedWeightForExercise(history, exercise.name);
             const decision = progressionForExercise(history, exercise, activeWorkout.recovery, activeWorkout.returnFromBreak);
             const alternatives = exerciseAlternatives(exercise.name);
+            const supersetPartner = exercise.supersetGroup ? activeWorkout.exercises.find((item: WorkoutSession["exercises"][number]) => item.name !== exercise.name && item.supersetGroup === exercise.supersetGroup) : undefined;
             return (
               <Panel key={exercise.name}>
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">{exercise.plannedSets} serie · {definition.repRange} reps · tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{alternatives.length > 0 && <select className="mt-2 min-h-9 max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 text-xs font-bold text-white" defaultValue="" onChange={(event) => { if (event.target.value) onAlternative(exerciseIndex, event.target.value); }}><option value="">Usa un'alternativa oggi</option>{alternatives.map((alternative) => <option key={alternative} value={alternative}>{alternative}</option>)}</select>}{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Puoi considerare: {formatNumber(suggestedWeight)}kg</p>}</div>
+                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">{exercise.plannedSets} serie · {definition.repRange} reps · tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{supersetPartner && <p className="mt-2 text-xs font-black text-accent">SUPERSET {exercise.supersetGroup} · poi {supersetPartner.name}, riposa e ripeti</p>}{alternatives.length > 0 && <select className="mt-2 min-h-9 max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 text-xs font-bold text-white" defaultValue="" onChange={(event) => { if (event.target.value) onAlternative(exerciseIndex, event.target.value); }}><option value="">Usa un'alternativa oggi</option>{alternatives.map((alternative) => <option key={alternative} value={alternative}>{alternative}</option>)}</select>}{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Puoi considerare: {formatNumber(suggestedWeight)}kg</p>}</div>
                   <Chip>{stateLabel(decision.state)}</Chip>
                 </div>
                 <div className="space-y-2">{exercise.sets.map((set, setIndex) => <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField decimals label="kg" value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
-                <Feedback exercise={exercise} onFeedback={(field: "technique" | "rpe" | "rir" | "notes", value: string | number) => onFeedback(exerciseIndex, field, value)} />
+                <Feedback exercise={exercise} onFeedback={(field: "technique" | "rpe" | "notes", value: string | number) => onFeedback(exerciseIndex, field, value)} />
               </Panel>
             );
           })}
@@ -493,18 +510,36 @@ function CoachScreen({ history, goals, progressions, daysAway }: any) {
   return <section className="space-y-5"><Panel highlight><p className="text-sm text-white/55">Coach</p><h2 className="mt-1 text-3xl font-black">{daysAway >= 10 ? "Rientro tranquillo." : "Pronto quando vuoi."}</h2><p className="mt-2 text-sm text-white/65">{daysAway >= 10 ? "La performance precedente è salva. Oggi conta ritrovare ritmo." : "Il piano è semplice: muoviti bene, poi progredisci."}</p></Panel>{top && <Panel><p className="text-sm text-white/55">Raccomandazione di oggi</p><h2 className="mt-1 text-2xl font-black text-accent">{top.exercise}</h2><div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Stato" value={stateLabel(top.state)} /><MiniMetric label="Azione" value={top.label} /></div><p className="mt-3 text-sm text-white/65"><span className="font-black text-white">Perché: </span>{top.why}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa fare: </span>{top.doThis}</p><p className="mt-2 text-sm text-white/65"><span className="font-black text-white">Cosa evitare: </span>{top.avoid}</p></Panel>}<Panel><p className="font-black">Questa settimana</p><div className="mt-3 space-y-2">{goals.map((goal: string) => <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm" key={goal}>{goal}</p>)}</div></Panel>{last?.coachSummary && <Panel><p className="font-black">Riepilogo ultimo allenamento</p><div className="mt-3 space-y-2">{last.coachSummary.map((line: string) => <p className="text-sm text-white/65" key={line}>{line}</p>)}</div></Panel>}<Panel><p className="font-black">Suggerimenti progressione</p><div className="mt-3 space-y-2">{progressions.slice(0, 5).map((item: any) => <div key={item.exercise} className="rounded-xl bg-white/[0.05] p-3"><p className="font-bold text-accent">{item.exercise}: {stateLabel(item.state)} · {item.label}</p><p className="mt-1 text-sm text-white/55">{item.detail}</p></div>)}</div></Panel></section>;
 }
 
-function SettingsScreen({ settings, importPreview, history, onSettings, onBackup, onImportFile, onConfirmImport, onCancelImport }: any) {
-  return <section className="space-y-5"><Panel><h2 className="text-xl font-black">Autopilot</h2><Toggle label="Lascia scegliere allenamento e focus a LeanME" checked={settings.autopilot} onChange={(autopilot: boolean) => onSettings({ ...settings, autopilot })} /><Toggle label="Promemoria backup ogni 30 giorni" checked={settings.backupReminder} onChange={(backupReminder: boolean) => onSettings({ ...settings, backupReminder })} /></Panel><Panel><h2 className="text-xl font-black">Dati e backup</h2><div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Ultimo backup" value={settings.lastBackupAt ? formatDate(settings.lastBackupAt) : "Mai"} /><MiniMetric label="Allenamenti" value={String(history.length)} /></div><button className="mt-4 min-h-12 w-full rounded-xl bg-accent font-black text-ink" onClick={onBackup}>Esporta backup</button><label className="mt-3 flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-white/[0.08] font-bold"><input className="hidden" type="file" accept="application/json" onChange={(event: React.ChangeEvent<HTMLInputElement>) => onImportFile(event.target.files?.[0])} />Importa backup</label>{importPreview && <div className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-3"><p className="font-black text-accent">Anteprima backup</p><p className="mt-1 text-sm text-white/65">{formatDate(importPreview.backupDate)} · {importPreview.workoutCount} allenamenti · {importPreview.exerciseCount} esercizi · {importPreview.prCount} PR</p><div className="mt-3 grid grid-cols-2 gap-2"><button className="min-h-11 rounded-xl bg-accent font-black text-ink" onClick={onConfirmImport}>Importa</button><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={onCancelImport}>Annulla</button></div></div>}<p className="mt-4 text-center text-xs font-bold text-white/35">LeanME v{APP_VERSION} · aggiornamento allenamento</p></Panel></section>;
+function SettingsScreen({ settings, importPreview, history, activeWorkout, programActive, programMigrationMessage, onAdoptProgram, onSettings, onBackup, onImportFile, onConfirmImport, onCancelImport }: any) {
+  const [confirmingProgram, setConfirmingProgram] = useState(false);
+  return <section className="space-y-5">
+    <Panel>
+      <h2 className="text-xl font-black">Autopilot</h2>
+      <Toggle label="Lascia scegliere allenamento e focus a LeanME" checked={settings.autopilot} onChange={(autopilot: boolean) => onSettings({ ...settings, autopilot })} />
+      <Toggle label="Promemoria backup ogni 30 giorni" checked={settings.backupReminder} onChange={(backupReminder: boolean) => onSettings({ ...settings, backupReminder })} />
+    </Panel>
+    <Panel highlight>
+      <p className="text-sm text-white/55">Programma</p>
+      <h2 className="mt-1 text-xl font-black">Upper · Lower · Full Body</h2>
+      <p className="mt-2 text-sm text-white/65">Aggiorna solo i template dei prossimi allenamenti. Storico, pesi, serie e record restano invariati.</p>
+      {programActive ? <p className="mt-3 text-sm font-black text-accent">Nuova programmazione attiva</p> : !confirmingProgram ? <button className="mt-4 min-h-12 w-full rounded-xl bg-accent font-black text-ink disabled:opacity-40" disabled={Boolean(activeWorkout)} onClick={() => setConfirmingProgram(true)}>Adotta la nuova programmazione</button> : <div className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-3"><p className="text-sm font-bold">La nuova programmazione sostituirà i template dei prossimi allenamenti A/B/C.</p><p className="mt-2 text-sm text-white/65">I tuoi allenamenti completati, pesi, serie, ripetizioni, progressi e record personali non verranno cancellati.</p><div className="mt-3 grid grid-cols-2 gap-2"><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={() => setConfirmingProgram(false)}>Annulla</button><button className="min-h-11 rounded-xl bg-accent font-black text-ink" onClick={async () => { await onAdoptProgram(); setConfirmingProgram(false); }}>Adotta</button></div></div>}
+      {activeWorkout && <p className="mt-3 text-xs font-bold text-white/50">Concludi o scarta l’allenamento attivo prima di cambiare programma.</p>}
+      {programMigrationMessage && <p className="mt-3 text-sm font-bold text-accent">{programMigrationMessage}</p>}
+    </Panel>
+    <Panel>
+      <h2 className="text-xl font-black">Dati e backup</h2>
+      <div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Ultimo backup" value={settings.lastBackupAt ? formatDate(settings.lastBackupAt) : "Mai"} /><MiniMetric label="Allenamenti" value={String(history.length)} /></div>
+      <button className="mt-4 min-h-12 w-full rounded-xl bg-accent font-black text-ink" onClick={onBackup}>Esporta backup</button>
+      <label className="mt-3 flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-white/[0.08] font-bold"><input className="hidden" type="file" accept="application/json" onChange={(event: React.ChangeEvent<HTMLInputElement>) => onImportFile(event.target.files?.[0])} />Importa backup</label>
+      {importPreview && <div className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-3"><p className="font-black text-accent">Anteprima backup</p><p className="mt-1 text-sm text-white/65">{formatDate(importPreview.backupDate)} · {importPreview.workoutCount} allenamenti · {importPreview.exerciseCount} esercizi · {importPreview.prCount} PR</p><div className="mt-3 grid grid-cols-2 gap-2"><button className="min-h-11 rounded-xl bg-accent font-black text-ink" onClick={onConfirmImport}>Importa</button><button className="min-h-11 rounded-xl bg-white/[0.08] font-bold" onClick={onCancelImport}>Annulla</button></div></div>}
+      <p className="mt-4 text-center text-xs font-bold text-white/35">LeanME v{APP_VERSION} · aggiornamento allenamento</p>
+    </Panel>
+  </section>;
 }
 
 function Feedback({ exercise, onFeedback }: any) {
   const ratings: TechniqueRating[] = ["Perfetta", "Buona", "Instabile", "Scarsa"];
-  return <div className="mt-4 space-y-3"><div><p className="mb-2 text-xs font-bold uppercase text-white/40">Tecnica</p><div className="grid grid-cols-4 gap-1">{ratings.map((rating) => <button key={rating} className={`min-h-10 rounded-lg text-xs font-bold ${exercise.feedback.technique === rating ? "bg-accent text-ink" : "bg-white/[0.07]"}`} onClick={() => onFeedback("technique", rating)}>{rating}</button>)}</div></div><Scale label="Difficoltà" value={exercise.feedback.rpe ?? 7} max={10} onChange={(value: number) => onFeedback("rpe", value)} /><RirScale value={exercise.feedback.rir ?? 2} onChange={(value: number) => onFeedback("rir", value)} /></div>;
-}
-
-function RirScale({ value, onChange }: { value: number; onChange: (value: number) => void }) {
-  const values = [0, 1, 2, 3, 4, 5];
-  return <div><p className="mb-2 text-xs font-bold uppercase text-white/40">RIR</p><div className="grid grid-cols-6 gap-1">{values.map((item) => <button className={`min-h-9 rounded-lg text-xs font-black ${value === item ? "bg-accent text-ink" : "bg-white/[0.07]"}`} key={item} onClick={() => onChange(item)}>{item === 5 ? "5+" : item}</button>)}</div></div>;
+  return <div className="mt-4 space-y-3"><div><p className="mb-2 text-xs font-bold uppercase text-white/40">Tecnica</p><div className="grid grid-cols-4 gap-1">{ratings.map((rating) => <button key={rating} className={`min-h-10 rounded-lg text-xs font-bold ${exercise.feedback.technique === rating ? "bg-accent text-ink" : "bg-white/[0.07]"}`} onClick={() => onFeedback("technique", rating)}>{rating}</button>)}</div></div><Scale label="Difficoltà" value={exercise.feedback.rpe ?? 7} max={10} onChange={(value: number) => onFeedback("rpe", value)} /></div>;
 }
 
 function FixedTimerBadge({ timer, remaining, onToggle, onAdjust, onClose }: any) {

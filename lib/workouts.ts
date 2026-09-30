@@ -37,6 +37,7 @@ export type TemplateExercise = {
   defaultReps: number;
   defaultWeight: number;
   priority: ExerciseDefinition["priority"];
+  supersetGroup?: string;
 };
 
 export type WorkoutTemplate = {
@@ -47,12 +48,20 @@ export type WorkoutTemplate = {
   exercises: TemplateExercise[];
   createdAt: string;
   updatedAt: string;
+  programVersion?: number;
 };
 
 type TemplateBlueprintExercise = {
   name: string;
   defaultSets: number;
+  supersetGroup?: string;
 };
+
+export const PROGRAM_VERSION = 2;
+
+export function exerciseId(name: string) {
+  return `exercise:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
 
 export const ACCENT = "#00D9FF";
 
@@ -136,8 +145,8 @@ const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission
       { name: "Lat Machine", defaultSets: 3 },
       { name: "Dumbbell Shoulder Press", defaultSets: 2 },
       { name: "Assisted Pull Ups", defaultSets: 2 },
-      { name: "Dumbbell Curl", defaultSets: 2 },
-      { name: "Triceps Pushdown", defaultSets: 2 }
+      { name: "Dumbbell Curl", defaultSets: 2, supersetGroup: "A" },
+      { name: "Triceps Pushdown", defaultSets: 2, supersetGroup: "A" }
     ]
   },
   "day-b": {
@@ -148,8 +157,8 @@ const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission
       { name: "Hack Squat", defaultSets: 4 },
       { name: "Leg Curl", defaultSets: 3 },
       { name: "Romanian Deadlift", defaultSets: 2 },
-      { name: "Calf Raises", defaultSets: 3 },
-      { name: "Crunch Machine", defaultSets: 2 }
+      { name: "Calf Raises", defaultSets: 3, supersetGroup: "B" },
+      { name: "Crunch Machine", defaultSets: 2, supersetGroup: "B" }
     ]
   },
   "day-c": {
@@ -177,6 +186,7 @@ export function createDefaultTemplates(): WorkoutTemplate[] {
     weeklyFocus: TEMPLATE_DATA[id].weeklyFocus,
     createdAt: now,
     updatedAt: now,
+    programVersion: PROGRAM_VERSION,
     exercises: TEMPLATE_DATA[id].exercises.map((entry) => {
       const exercise = EXERCISES[entry.name];
       return {
@@ -184,7 +194,8 @@ export function createDefaultTemplates(): WorkoutTemplate[] {
         defaultSets: entry.defaultSets,
         defaultReps: exercise.defaultReps,
         defaultWeight: exercise.defaultWeight,
-        priority: exercise.priority
+        priority: exercise.priority,
+        supersetGroup: entry.supersetGroup
       };
     })
   }));

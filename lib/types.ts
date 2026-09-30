@@ -19,6 +19,7 @@ export type ExerciseFeedback = {
 
 export type WorkoutExercise = {
   name: string;
+  exerciseId?: string;
   plannedSets: number;
   plannedReps: number;
   plannedWeight: number;
@@ -28,6 +29,7 @@ export type WorkoutExercise = {
   feedback: ExerciseFeedback;
   progressionState?: ProgressionState;
   progressionNote?: string;
+  supersetGroup?: string;
 };
 
 export type RecoveryCheck = {

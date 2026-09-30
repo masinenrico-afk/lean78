@@ -3,7 +3,7 @@ import { createBackup, validateBackup } from "./backupEngine";
 import { workoutProgressions } from "./progressionEngine";
 import { shouldMaintainLoad } from "./recoveryEngine";
 import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RestTimer, WorkoutSession } from "./types";
-import { EXERCISES, expressExercises, createDefaultTemplates, type WorkoutTemplate } from "./workouts";
+import { EXERCISES, exerciseId, expressExercises, createDefaultTemplates, type WorkoutTemplate } from "./workouts";
 
 const DB_NAME = "leanme-db";
 const DB_VERSION = 3;
@@ -79,6 +79,40 @@ export async function getItem<T>(storeName: StoreName, key: IDBValidKey) {
 
 export async function deleteItem(storeName: StoreName, key: IDBValidKey) {
   await storeTransaction<undefined>(storeName, "readwrite", (store) => store.delete(key));
+}
+
+export async function replaceTemplatesAtomically(templates: WorkoutTemplate[]) {
+  const db = await openDb();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction("templates", "readwrite");
+    const store = transaction.objectStore("templates");
+    templates.forEach((template) => store.put(template));
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+    transaction.onabort = () => {
+      db.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+export async function adoptReferenceProgram(existingTemplates: WorkoutTemplate[]) {
+  const savedExerciseDefaults = new Map(existingTemplates.flatMap((template) => template.exercises).map((exercise) => [exercise.name, exercise]));
+  const nextTemplates = createDefaultTemplates().map((template) => ({
+    ...template,
+    exercises: template.exercises.map((exercise) => {
+      const saved = savedExerciseDefaults.get(exercise.name);
+      return saved ? { ...exercise, defaultWeight: saved.defaultWeight, defaultReps: saved.defaultReps } : exercise;
+    })
+  }));
+  await replaceTemplatesAtomically(nextTemplates);
+  return nextTemplates;
 }
 
 export async function seedAppData() {
@@ -218,6 +252,7 @@ function normalizeLegacyWorkout(workout: Partial<WorkoutSession>, defaults: Work
       const firstSet = sets[0];
       return {
         name: exercise.name,
+        exerciseId: exerciseId(exercise.name),
         plannedSets: exercise.plannedSets ?? (sets.length || definition?.defaultSets || 3),
         plannedReps: exercise.plannedReps ?? firstSet?.reps ?? definition?.defaultReps ?? 8,
         plannedWeight: exercise.plannedWeight ?? firstSet?.weight ?? definition?.defaultWeight ?? 0,
@@ -252,9 +287,11 @@ export function createWorkout(template: WorkoutTemplate, expressMinutes: number,
 
       return {
         name: exercise.name,
+        exerciseId: exerciseId(exercise.name),
         plannedSets: exercise.defaultSets,
         plannedReps,
         plannedWeight,
+        supersetGroup: exercise.supersetGroup,
         sets: Array.from({ length: exercise.defaultSets }, (_, index) => ({
           reps: previous[index]?.reps ?? plannedReps,
           weight: returnFromBreak ? plannedWeight : previous[index]?.weight ?? plannedWeight,

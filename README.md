@@ -17,6 +17,7 @@ LeanME è una Progressive Web App per iPhone, offline-first, pensata come un com
 - Progressi: dashboard lifetime, record personali, andamento esercizi
 - Coach: riepilogo umano, suggerimenti di progressione, stati BUILDING/CONSOLIDATING/READY/NEW LOAD, obiettivi settimanali
 - Impostazioni: Autopilot, esportazione/importazione backup
+- Programma: adozione esplicita e atomica dei template Upper/Lower/Full Body, senza toccare lo storico
 
 ## Architettura
 
