@@ -45,6 +45,13 @@ select {
 
 button {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+button:disabled {
+  pointer-events: none;
 }
 
 input,
