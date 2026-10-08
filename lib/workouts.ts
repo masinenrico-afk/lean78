@@ -69,6 +69,7 @@ export type ExerciseLibraryDetail = {
 
 export type TemplateExercise = {
   name: string;
+  originalName?: string;
   defaultSets: number;
   defaultReps: number;
   defaultWeight: number;

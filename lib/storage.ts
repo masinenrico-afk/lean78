@@ -253,6 +253,7 @@ function normalizeLegacyWorkout(workout: Partial<WorkoutSession>, defaults: Work
       return {
         name: exercise.name,
         exerciseId: exerciseId(exercise.name),
+        originalExerciseName: exercise.originalExerciseName,
         plannedSets: exercise.plannedSets ?? (sets.length || definition?.defaultSets || 3),
         plannedReps: exercise.plannedReps ?? firstSet?.reps ?? definition?.defaultReps ?? 8,
         plannedWeight: exercise.plannedWeight ?? firstSet?.weight ?? definition?.defaultWeight ?? 0,
@@ -290,6 +291,7 @@ export function createWorkout(template: WorkoutTemplate, expressMinutes: number,
       return {
         name: exercise.name,
         exerciseId: exerciseId(exercise.name),
+        originalExerciseName: exercise.originalName,
         plannedSets: exercise.defaultSets,
         plannedReps,
         plannedWeight,

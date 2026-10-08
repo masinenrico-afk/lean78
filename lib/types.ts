@@ -22,6 +22,7 @@ export type ExerciseFeedback = {
 export type WorkoutExercise = {
   name: string;
   exerciseId?: string;
+  originalExerciseName?: string;
   plannedSets: number;
   plannedReps: number;
   plannedWeight: number;
