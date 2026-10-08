@@ -1,4 +1,4 @@
-const CACHE_NAME = "leanme-v7";
+const CACHE_NAME = "leanme-v8";
 const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {

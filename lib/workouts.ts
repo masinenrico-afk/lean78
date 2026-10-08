@@ -98,7 +98,7 @@ export function exerciseId(name: string) {
   return `exercise:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 }
 
-export const ACCENT = "#B8FF00";
+export const ACCENT = "#00D9FF";
 
 export const REST_SECONDS: Record<ExerciseKind, number> = {
   compound: 120,
