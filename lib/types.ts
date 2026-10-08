@@ -1,4 +1,4 @@
-import type { TemplateId, Tempo, WorkoutTemplate } from "./workouts";
+import type { MeasurementType, TemplateId, Tempo, WorkoutTemplate } from "./workouts";
 
 export type TechniqueRating = "Perfetta" | "Buona" | "Instabile" | "Scarsa";
 export type ProgressionState = "BUILDING" | "CONSOLIDATING" | "READY" | "NEW_LOAD";
@@ -8,6 +8,8 @@ export type WorkoutSet = {
   weight: number;
   completed: boolean;
   completedAt?: string;
+  actualDurationSeconds?: number;
+  side?: "left" | "right" | "both";
 };
 
 export type ExerciseFeedback = {
@@ -25,11 +27,24 @@ export type WorkoutExercise = {
   plannedWeight: number;
   tempo?: Tempo;
   holdSeconds?: number;
+  measurementType?: MeasurementType;
+  targetDurationSeconds?: number;
   sets: WorkoutSet[];
   feedback: ExerciseFeedback;
   progressionState?: ProgressionState;
   progressionNote?: string;
   supersetGroup?: string;
+};
+
+export type TimedExerciseTimer = {
+  exerciseIndex: number;
+  setIndex: number;
+  targetDurationSeconds: number;
+  startTime: number;
+  endTime: number;
+  running: boolean;
+  pausedRemainingSeconds: number;
+  finished: boolean;
 };
 
 export type RecoveryCheck = {
@@ -54,6 +69,7 @@ export type WorkoutSession = {
   reentryUntil?: string;
   expressMinutes: number;
   exercises: WorkoutExercise[];
+  exerciseTimer?: TimedExerciseTimer;
   coachSummary?: string[];
   victories?: string[];
 };

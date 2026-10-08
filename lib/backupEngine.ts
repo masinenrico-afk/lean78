@@ -2,8 +2,8 @@ import { calculatePersonalRecords } from "./analyticsEngine";
 import type { AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, WorkoutSession } from "./types";
 import type { WorkoutTemplate } from "./workouts";
 
-export const APP_VERSION = "2.5.0";
-export const SCHEMA_VERSION = 4;
+export const APP_VERSION = "2.6.0";
+export const SCHEMA_VERSION = 5;
 
 export function createBackup(args: {
   workouts: WorkoutSession[];

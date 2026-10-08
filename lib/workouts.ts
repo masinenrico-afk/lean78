@@ -1,4 +1,7 @@
 export type ExerciseKind = "compound" | "machine" | "isolation" | "abs";
+export type MeasurementType = "reps" | "duration";
+export type ExerciseClassification = "Fondamentale" | "Complementare" | "Isolamento" | "Core / Stabilità";
+export type LoadDirection = "standard" | "assistance";
 export type TemplateId = "day-a" | "day-b" | "day-c";
 export type Tempo = "3-0-1" | "4-1-1" | "2-1-2";
 export type ExerciseRole = "primary" | "secondary" | "accessory" | "core";
@@ -29,6 +32,38 @@ export type ExerciseDefinition = {
   tempo?: Tempo;
   holdSeconds?: number;
   warmup?: boolean;
+  classification?: ExerciseClassification;
+  measurementType?: MeasurementType;
+  targetDurationSeconds?: number;
+  defaultSide?: "left" | "right" | "both";
+  loadDirection?: LoadDirection;
+  primaryMuscle?: string;
+  secondaryMuscles?: string[];
+  equipment?: string;
+  technicalDifficulty?: "Base" | "Intermedia" | "Avanzata";
+};
+
+export type ExerciseAlternative = {
+  exerciseId: string;
+  name: string;
+  primaryMuscle: string;
+  secondaryMuscles: string[];
+  movementPattern: string;
+  classification: ExerciseClassification;
+  suggestedSets: number;
+  repRange: string;
+  equipment: string;
+  technicalDifficulty: "Base" | "Intermedia" | "Avanzata";
+  difference: string;
+  relationship: "equivalent" | "different-stimulus";
+};
+
+export type ExerciseLibraryDetail = {
+  startingPosition: string;
+  instructions: string[];
+  commonMistakes: string[];
+  safety: string[];
+  media?: { imageSrc?: string; videoUrl?: string; attribution?: string };
 };
 
 export type TemplateExercise = {
@@ -63,7 +98,7 @@ export function exerciseId(name: string) {
   return `exercise:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 }
 
-export const ACCENT = "#00D9FF";
+export const ACCENT = "#B8FF00";
 
 export const REST_SECONDS: Record<ExerciseKind, number> = {
   compound: 120,
@@ -83,7 +118,7 @@ export const EXERCISES: Record<string, ExerciseDefinition> = {
   "Crunch Machine": { name: "Crunch Machine", kind: "abs", focus: "core", priority: "low", defaultSets: 2, defaultReps: 12, repTarget: 15, repRange: "10-15", defaultWeight: 60, increment: 2.5, tempo: "2-1-2", allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "trunk-flexion", minSets: 1, supersetCompatible: true } },
   "Hack Squat": { name: "Hack Squat", kind: "compound", focus: "legs", priority: "high", defaultSets: 4, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 40, increment: 10, tempo: "3-0-1", allocation: { role: "primary", fatigueCost: "high", technicalDemand: "high", movementPattern: "knee-dominant", redundancyGroup: "knee-dominant", minSets: 2 } },
   "Pulley Row": { name: "Pulley Row", kind: "machine", focus: "back", priority: "high", defaultSets: 3, defaultReps: 8, repTarget: 12, repRange: "8-12", defaultWeight: 45, increment: 2.5, tempo: "3-0-1" },
-  "Assisted Pull Ups": { name: "Assisted Pull Ups", kind: "machine", focus: "back", priority: "medium", defaultSets: 2, defaultReps: 6, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 2.5, tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "high", movementPattern: "vertical-pull", redundancyGroup: "vertical-pull", minSets: 1 } },
+  "Assisted Pull Ups": { name: "Assisted Pull Ups", kind: "machine", focus: "back", priority: "medium", defaultSets: 2, defaultReps: 6, repTarget: 10, repRange: "6-10", defaultWeight: 30, increment: 2.5, tempo: "3-0-1", loadDirection: "assistance", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "high", movementPattern: "vertical-pull", redundancyGroup: "vertical-pull", minSets: 1 } },
   "Leg Curl": { name: "Leg Curl", kind: "machine", focus: "legs", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 12, repRange: "8-12", defaultWeight: 30, increment: 2.5, tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "low", movementPattern: "knee-flexion", redundancyGroup: "hamstrings", minSets: 1 } },
   "Dumbbell Curl": { name: "Dumbbell Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "8-12", defaultWeight: 8, increment: 1.25, tempo: "2-1-2", allocation: { role: "accessory", fatigueCost: "low", technicalDemand: "low", movementPattern: "elbow-flexion", minSets: 1, supersetCompatible: true } },
   "Face Pull": { name: "Face Pull", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2", holdSeconds: 1, warmup: true },
@@ -99,41 +134,101 @@ export const EXERCISES: Record<string, ExerciseDefinition> = {
   "Seated Leg Curl": { name: "Seated Leg Curl", kind: "machine", focus: "legs", priority: "medium", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 30, increment: 2.5, tempo: "3-0-1" },
   "Cable Curl": { name: "Cable Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 10, increment: 1.25, tempo: "2-1-2" },
   "Rear Delt Cable Fly": { name: "Rear Delt Cable Fly", kind: "isolation", focus: "shoulders", priority: "medium", defaultSets: 3, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 5, increment: 1.25, tempo: "2-1-2" },
-  "Rope Hammer Curl": { name: "Rope Hammer Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" }
+  "Rope Hammer Curl": { name: "Rope Hammer Curl", kind: "isolation", focus: "arms", priority: "low", defaultSets: 3, defaultReps: 10, repTarget: 15, repRange: "10-15", defaultWeight: 12.5, increment: 1.25, tempo: "2-1-2" },
+  "Plank": { name: "Plank", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 0, repTarget: 0, repRange: "20-45 sec", defaultWeight: 0, increment: 0, measurementType: "duration", targetDurationSeconds: 30, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-extension", minSets: 1, supersetCompatible: true } },
+  "Side Plank": { name: "Side Plank", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 0, repTarget: 0, repRange: "20-30 sec/lato", defaultWeight: 0, increment: 0, measurementType: "duration", targetDurationSeconds: 25, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-lateral-flexion", minSets: 1, supersetCompatible: true } },
+  "Hollow Hold": { name: "Hollow Hold", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 0, repTarget: 0, repRange: "15-30 sec", defaultWeight: 0, increment: 0, measurementType: "duration", targetDurationSeconds: 20, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-extension", minSets: 1, supersetCompatible: true } },
+  "Dead Bug": { name: "Dead Bug", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "8-12/lato", defaultWeight: 0, increment: 0, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "anti-extension", minSets: 1, supersetCompatible: true } },
+  "Bird Dog": { name: "Bird Dog", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "8-12/lato", defaultWeight: 0, increment: 0, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "anti-rotation", minSets: 1, supersetCompatible: true } },
+  "Pallof Press": { name: "Pallof Press", kind: "isolation", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "10-12/lato", defaultWeight: 5, increment: 1.25, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-rotation", minSets: 1, supersetCompatible: true } }
 };
 
-const ALTERNATIVES: Record<string, string[]> = {
-  "Leg Press": ["Hack Squat"],
-  "Hack Squat": ["Leg Press"],
-  "Calf Raises": ["Standing Calf Raise"],
-  "Standing Calf Raise": ["Calf Raises"],
-  "Chest Press": ["Dumbbell Chest Press"],
-  "Dumbbell Chest Press": ["Chest Press"],
-  "Lat Machine": ["Assisted Pull Ups"],
-  "Assisted Pull Ups": ["Lat Machine"],
-  "Pulley Row": ["Chest Supported Row"],
-  "Chest Supported Row": ["Pulley Row"],
-  "Shoulder Press": ["Dumbbell Shoulder Press"],
-  "Dumbbell Shoulder Press": ["Shoulder Press"],
-  "Lateral Raises": ["Cable Lateral Raise"],
-  "Cable Lateral Raise": ["Lateral Raises"],
-  "Triceps Pushdown": ["Cable Overhead Extension"],
-  "Cable Overhead Extension": ["Triceps Pushdown"],
-  "Crunch Machine": ["Cable Crunch"],
-  "Cable Crunch": ["Crunch Machine"],
-  "Leg Curl": ["Seated Leg Curl"],
-  "Seated Leg Curl": ["Leg Curl"],
-  "Dumbbell Curl": ["Cable Curl"],
-  "Cable Curl": ["Dumbbell Curl"],
-  "Face Pull": ["Rear Delt Cable Fly"],
-  "Rear Delt Cable Fly": ["Face Pull"],
-  "Hammer Curl": ["Rope Hammer Curl"],
-  "Rope Hammer Curl": ["Hammer Curl"]
+const ALTERNATIVES: Record<string, Array<{ name: string; relationship: ExerciseAlternative["relationship"]; difference: string }>> = {
+  "Leg Press": [{ name: "Hack Squat", relationship: "equivalent", difference: "Stesso pattern dominante di ginocchio, con una traiettoria più vincolata." }],
+  "Hack Squat": [{ name: "Leg Press", relationship: "equivalent", difference: "Stesso focus su quadricipiti, con schienale e angolo diversi." }],
+  "Calf Raises": [{ name: "Standing Calf Raise", relationship: "equivalent", difference: "Stessa estensione di caviglia, con carico in piedi." }],
+  "Standing Calf Raise": [{ name: "Calf Raises", relationship: "equivalent", difference: "Stesso gesto, in versione più stabile." }],
+  "Chest Press": [{ name: "Dumbbell Chest Press", relationship: "equivalent", difference: "Stessa spinta orizzontale, con più richiesta di stabilità." }],
+  "Dumbbell Chest Press": [{ name: "Chest Press", relationship: "equivalent", difference: "Stessa spinta orizzontale, con traiettoria guidata." }],
+  "Lat Machine": [{ name: "Assisted Pull Ups", relationship: "equivalent", difference: "Stessa tirata verticale; l'assistenza si riduce per rendere il gesto più difficile." }],
+  "Assisted Pull Ups": [{ name: "Lat Machine", relationship: "equivalent", difference: "Stessa tirata verticale, più facilmente regolabile al cavo." }],
+  "Pulley Row": [{ name: "Chest Supported Row", relationship: "equivalent", difference: "Stessa tirata orizzontale, con meno richiesta lombare." }],
+  "Chest Supported Row": [{ name: "Pulley Row", relationship: "equivalent", difference: "Stessa tirata orizzontale, con maggiore libertà di assetto." }],
+  "Shoulder Press": [{ name: "Dumbbell Shoulder Press", relationship: "equivalent", difference: "Stessa spinta verticale, con più stabilità richiesta ai manubri." }],
+  "Dumbbell Shoulder Press": [{ name: "Shoulder Press", relationship: "equivalent", difference: "Stessa spinta verticale, con macchina più stabile." }],
+  "Lateral Raises": [{ name: "Cable Lateral Raise", relationship: "equivalent", difference: "Stesso isolamento del deltoide laterale, con tensione più costante." }, { name: "Face Pull", relationship: "different-stimulus", difference: "Lavora soprattutto deltoidi posteriori e controllo scapolare, non sostituisce completamente l'alzata laterale." }],
+  "Cable Lateral Raise": [{ name: "Lateral Raises", relationship: "equivalent", difference: "Stesso isolamento del deltoide laterale, con manubri." }],
+  "Triceps Pushdown": [{ name: "Cable Overhead Extension", relationship: "equivalent", difference: "Stesso tricipite, con enfasi più marcata sul capo lungo." }],
+  "Cable Overhead Extension": [{ name: "Triceps Pushdown", relationship: "equivalent", difference: "Stesso tricipite, con assetto più stabile." }],
+  "Crunch Machine": [{ name: "Cable Crunch", relationship: "equivalent", difference: "Stessa flessione del tronco, con cavo regolabile." }, { name: "Plank", relationship: "different-stimulus", difference: "Allena anti-estensione e stabilità, non è equivalente alla flessione del tronco." }, { name: "Dead Bug", relationship: "different-stimulus", difference: "Allena controllo lombo-pelvico e coordinazione, non la stessa flessione." }],
+  "Cable Crunch": [{ name: "Crunch Machine", relationship: "equivalent", difference: "Stessa flessione del tronco, con macchina più guidata." }, { name: "Hollow Hold", relationship: "different-stimulus", difference: "Allena anti-estensione a tempo, non sostituisce la flessione del tronco." }],
+  "Leg Curl": [{ name: "Seated Leg Curl", relationship: "equivalent", difference: "Stesso lavoro di flessione del ginocchio, con anca più flessa." }, { name: "Romanian Deadlift", relationship: "different-stimulus", difference: "Coinvolge femorali in estensione d'anca: è complementare, non equivalente." }],
+  "Seated Leg Curl": [{ name: "Leg Curl", relationship: "equivalent", difference: "Stesso lavoro sui femorali, con assetto diverso." }],
+  "Dumbbell Curl": [{ name: "Cable Curl", relationship: "equivalent", difference: "Stessa flessione di gomito, con tensione più costante." }, { name: "Hammer Curl", relationship: "different-stimulus", difference: "Maggiore enfasi su brachiale e presa neutra." }],
+  "Cable Curl": [{ name: "Dumbbell Curl", relationship: "equivalent", difference: "Stessa flessione di gomito, con carico libero." }],
+  "Face Pull": [{ name: "Rear Delt Cable Fly", relationship: "equivalent", difference: "Stesso focus posteriore della spalla, con meno rotazione esterna." }, { name: "Cable Lateral Raise", relationship: "different-stimulus", difference: "Focus sul deltoide laterale: non è una sostituzione equivalente." }],
+  "Rear Delt Cable Fly": [{ name: "Face Pull", relationship: "equivalent", difference: "Stesso focus posteriore, con più rotazione esterna e controllo scapolare." }],
+  "Hammer Curl": [{ name: "Rope Hammer Curl", relationship: "equivalent", difference: "Stesso pattern a presa neutra, al cavo." }, { name: "Dumbbell Curl", relationship: "different-stimulus", difference: "Più enfasi sul bicipite in supinazione." }],
+  "Rope Hammer Curl": [{ name: "Hammer Curl", relationship: "equivalent", difference: "Stesso pattern a presa neutra, con manubri." }]
 };
 
-export function exerciseAlternatives(name: string) {
-  return ALTERNATIVES[name] ?? [];
+const MUSCLES: Record<ExerciseDefinition["focus"], { primary: string; secondary: string[] }> = {
+  legs: { primary: "Gambe", secondary: ["Glutei", "Core"] },
+  chest: { primary: "Petto", secondary: ["Tricipiti", "Spalle anteriori"] },
+  back: { primary: "Schiena", secondary: ["Bicipiti", "Deltoidi posteriori"] },
+  shoulders: { primary: "Spalle", secondary: ["Tricipiti", "Parte alta della schiena"] },
+  arms: { primary: "Braccia", secondary: ["Avambracci"] },
+  core: { primary: "Core", secondary: ["Stabilizzatori dell'anca", "Schiena"] }
+};
+
+export function exerciseClassification(name: string): ExerciseClassification {
+  const definition = EXERCISES[name];
+  if (definition?.classification) return definition.classification;
+  const role = definition?.allocation?.role;
+  if (role === "core" || definition?.focus === "core" || definition?.kind === "abs") return "Core / Stabilità";
+  if (role === "primary" || definition?.kind === "compound") return "Fondamentale";
+  if (role === "accessory" || definition?.kind === "isolation") return "Isolamento";
+  return "Complementare";
 }
+
+export function classificationExplanation(classification: ExerciseClassification) {
+  return {
+    "Fondamentale": "Movimento prioritario: costruisce la base di forza e coordinazione.",
+    "Complementare": "Completa il lavoro principale con volume mirato e tecnica controllata.",
+    "Isolamento": "Concentra lo stimolo su un distretto, con fatica sistemica contenuta.",
+    "Core / Stabilità": "Allena controllo del tronco, respirazione e stabilità prima del carico."
+  }[classification];
+}
+
+export function exerciseAlternatives(name: string): ExerciseAlternative[] {
+  return (ALTERNATIVES[name] ?? []).map((option) => alternativeDetail(option));
+}
+
+function alternativeDetail(option: { name: string; relationship: ExerciseAlternative["relationship"]; difference: string }): ExerciseAlternative {
+  const definition = EXERCISES[option.name];
+  const muscles = MUSCLES[definition.focus];
+  return {
+    exerciseId: exerciseId(option.name), name: option.name, primaryMuscle: definition.primaryMuscle ?? muscles.primary,
+    secondaryMuscles: definition.secondaryMuscles ?? muscles.secondary, movementPattern: definition.allocation?.movementPattern ?? definition.focus,
+    classification: exerciseClassification(option.name), suggestedSets: definition.defaultSets, repRange: definition.repRange,
+    equipment: definition.equipment ?? equipmentFor(definition), technicalDifficulty: definition.technicalDifficulty ?? difficultyFor(definition),
+    difference: option.difference, relationship: option.relationship
+  };
+}
+
+export function exerciseLibraryDetail(name: string): ExerciseLibraryDetail {
+  const definition = EXERCISES[name];
+  const timed = definition?.measurementType === "duration";
+  return {
+    startingPosition: timed ? "Sistema colonna e bacino neutri; respira senza perdere tensione." : "Regola seduta e carico, poi trova un assetto stabile prima della prima ripetizione.",
+    instructions: timed ? ["Avvia il timer solo quando l'assetto è stabile.", "Mantieni respiro regolare e tensione continua.", "Interrompi se perdi posizione o senti dolore."] : ["Muovi il carico con controllo nel ROM che riesci a gestire.", "Mantieni il ritmo previsto senza slanci.", "Fermati prima che la tecnica cambi."],
+    commonMistakes: timed ? ["Trattenere il respiro", "Compensare con la schiena", "Prolungare la tenuta perdendo controllo"] : ["Usare slancio", "Accorciare il ROM", "Aumentare il carico prima di controllarlo"],
+    safety: ["Nessun dolore articolare acuto.", "Regola macchina e appoggi prima della serie.", "Riduci carico o interrompi se l'esecuzione peggiora." ]
+  };
+}
+
+function equipmentFor(definition: ExerciseDefinition) { return definition.kind === "compound" ? "Macchina o pesi liberi" : definition.kind === "abs" ? "Corpo libero o macchina" : "Macchina, cavo o manubri"; }
+function difficultyFor(definition: ExerciseDefinition): "Base" | "Intermedia" | "Avanzata" { return definition.allocation?.technicalDemand === "high" ? "Avanzata" : definition.allocation?.technicalDemand === "medium" ? "Intermedia" : "Base"; }
 
 const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission: string; weeklyFocus: string; exercises: TemplateBlueprintExercise[] }> = {
   "day-a": {

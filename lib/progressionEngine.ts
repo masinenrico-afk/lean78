@@ -27,8 +27,9 @@ export function progressionForExercise(history: WorkoutSession[], exercise: Work
   const rpe = exercise.feedback.rpe ?? 7;
   const previous = previousExercise(history, exercise.name);
   const previousSets = previous?.sets.filter((set) => set.completed) ?? [];
-  const currentWeight = completed.length ? Math.max(...completed.map((set) => set.weight)) : exercise.plannedWeight;
-  const previousWeight = previousSets.length ? Math.max(...previousSets.map((set) => set.weight)) : undefined;
+  const usesAssistance = definition.loadDirection === "assistance";
+  const currentWeight = completed.length ? progressionLoad(completed.map((set) => set.weight), usesAssistance) : exercise.plannedWeight;
+  const previousWeight = previousSets.length ? progressionLoad(previousSets.map((set) => set.weight), usesAssistance) : undefined;
   const reachedTopReps = completed.length >= definition.defaultSets && completed.every((set) => set.reps >= definition.repTarget);
   const previousReachedTopReps = previousSets.length >= definition.defaultSets && previousSets.slice(0, definition.defaultSets).every((set) => set.reps >= definition.repTarget);
   const sameLoadAsPrevious = previousWeight !== undefined && Math.abs(currentWeight - previousWeight) < 0.01;
@@ -51,21 +52,32 @@ export function progressionForExercise(history: WorkoutSession[], exercise: Work
     return decision(exercise.name, "BUILDING", "Costruisci reps", `Punta a ${definition.defaultSets} serie vicine a ${definition.repTarget} reps prima di aumentare.`, "Sei ancora dentro la fase di costruzione.", "Aggiungi ripetizioni mantenendo controllo.", "Non serve aumentare il carico.");
   }
 
-  if (previousWeight !== undefined && currentWeight > previousWeight) {
-    return decision(exercise.name, "NEW_LOAD", "Nuovo carico", "Hai già aumentato. Ricostruisci ripetizioni e sicurezza a questo peso.", "Il carico corrente è più alto della volta precedente.", "Lascia margine e cura traiettoria/ROM.", "Non forzare un altro salto.");
+  if (previousWeight !== undefined && isHarderLoad(currentWeight, previousWeight, usesAssistance)) {
+    return decision(exercise.name, "NEW_LOAD", usesAssistance ? "Meno assistenza" : "Nuovo carico", usesAssistance ? "Hai già ridotto l'assistenza. Ricostruisci ripetizioni e sicurezza con questo supporto." : "Hai già aumentato. Ricostruisci ripetizioni e sicurezza a questo peso.", usesAssistance ? "Meno assistenza rende la trazione più difficile." : "Il carico corrente è più alto della volta precedente.", "Lascia margine e cura traiettoria/ROM.", "Non forzare un altro salto.");
   }
 
   if (!reachedTopReps || !previousReachedTopReps || !sameLoadAsPrevious || !goodTechnique || !enoughInReserve) {
     return decision(exercise.name, "CONSOLIDATING", "Consolida", "Hai raggiunto il target. Ripetere questo carico una volta in più va benissimo.", "LeanME cerca stabilità prima del prossimo salto.", "Rendi lo stesso peso più pulito e controllato.", "Non devi aumentare oggi.");
   }
 
-  const suggestedWeight = currentWeight + definition.increment;
+  const suggestedWeight = usesAssistance ? Math.max(0, currentWeight - definition.increment) : currentWeight + definition.increment;
+  if (usesAssistance) {
+    return decision(exercise.name, "READY", "Riduci assistenza", `Se ti senti bene, puoi considerare ${suggestedWeight}kg di assistenza. Meno assistenza significa una trazione più difficile.`, "Hai consolidato target, controllo e recupero con l'assistenza attuale.", "Riduci l'assistenza solo se il ROM resta pulito.", "Non ridurre l'assistenza per dovere.", suggestedWeight);
+  }
   if (definition.increment >= 10) {
     const priorCount = history.filter((workout) => workout.exercises.some((item) => item.name === exercise.name && exerciseVolume(item) > 0)).length;
     return decision(exercise.name, "READY", "Pronto con calma", `La macchina salta di ${definition.increment}kg. Puoi considerare ${suggestedWeight}kg, oppure usare ${CONTROL_STEPS[priorCount % CONTROL_STEPS.length]} e consolidare.`, "Prestazione stabile, ma il salto è grande.", "Scegli tra micro-progressione tecnica o prossimo pin.", "Non sentirti obbligato ad aumentare.", suggestedWeight);
   }
 
   return decision(exercise.name, "READY", "Pronto", "Se ti senti bene, puoi considerare il prossimo carico. Consolidare ancora è comunque progresso.", "Target ripetuto con buon controllo e recupero adeguato.", "Aumenta solo se il movimento resta pulito.", "Non aumentare per dovere.", suggestedWeight);
+}
+
+function progressionLoad(weights: number[], assistance: boolean) {
+  return assistance ? Math.min(...weights) : Math.max(...weights);
+}
+
+function isHarderLoad(current: number, previous: number, assistance: boolean) {
+  return assistance ? current < previous : current > previous;
 }
 
 export function workoutProgressions(history: WorkoutSession[], workout: WorkoutSession) {

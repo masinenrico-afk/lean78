@@ -24,5 +24,5 @@
     ]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "Lean78-upload", "Lean78-GitHub-v2"]
+  "exclude": ["node_modules", "Lean78-upload", "Lean78-GitHub-v2", "LeanME-GitHub 8"]
 }

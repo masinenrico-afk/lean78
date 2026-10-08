@@ -258,6 +258,8 @@ function normalizeLegacyWorkout(workout: Partial<WorkoutSession>, defaults: Work
         plannedWeight: exercise.plannedWeight ?? firstSet?.weight ?? definition?.defaultWeight ?? 0,
         tempo: exercise.tempo,
         holdSeconds: exercise.holdSeconds,
+        measurementType: definition?.measurementType,
+        targetDurationSeconds: definition?.targetDurationSeconds,
         sets,
         feedback: exercise.feedback ?? {}
       };
@@ -291,6 +293,8 @@ export function createWorkout(template: WorkoutTemplate, expressMinutes: number,
         plannedSets: exercise.defaultSets,
         plannedReps,
         plannedWeight,
+        measurementType: EXERCISES[exercise.name].measurementType,
+        targetDurationSeconds: EXERCISES[exercise.name].targetDurationSeconds,
         supersetGroup: exercise.supersetGroup,
         sets: Array.from({ length: exercise.defaultSets }, (_, index) => ({
           reps: previous[index]?.reps ?? plannedReps,
@@ -342,11 +346,13 @@ export function suggestedWeightForExercise(workouts: WorkoutSession[], exerciseN
   };
   if (!isStableSession(latest) || !isStableSession(prior)) return undefined;
 
-  const previousWeight = Math.max(...latest.exercise.sets.filter((set) => set.completed).map((set) => set.weight));
-  const priorWeight = Math.max(...prior.exercise.sets.filter((set) => set.completed).map((set) => set.weight));
+  const weights = latest.exercise.sets.filter((set) => set.completed).map((set) => set.weight);
+  const priorWeights = prior.exercise.sets.filter((set) => set.completed).map((set) => set.weight);
+  const previousWeight = definition.loadDirection === "assistance" ? Math.min(...weights) : Math.max(...weights);
+  const priorWeight = definition.loadDirection === "assistance" ? Math.min(...priorWeights) : Math.max(...priorWeights);
   if (Math.abs(previousWeight - priorWeight) > 0.01) return undefined;
 
-  return roundToStep(previousWeight + definition.increment, 0.01);
+  return roundToStep(definition.loadDirection === "assistance" ? Math.max(0, previousWeight - definition.increment) : previousWeight + definition.increment, 0.01);
 }
 
 export function normalizeWorkout(session: WorkoutSession): WorkoutSession {

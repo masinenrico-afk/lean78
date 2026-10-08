@@ -23,8 +23,8 @@ import {
   suggestedWeightForExercise,
   daysSinceLastCompletedWorkout
 } from "@/lib/storage";
-import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, TechniqueRating, WorkoutSession } from "@/lib/types";
-import { EXERCISES, PROGRAM_VERSION, REST_SECONDS, exerciseAlternatives, exerciseId, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
+import type { ActiveWorkoutRecord, AppSettings, CoachData, LeanBackup, RecoveryCheck, RestTimer, TechniqueRating, TimedExerciseTimer, WorkoutSession } from "@/lib/types";
+import { EXERCISES, PROGRAM_VERSION, REST_SECONDS, classificationExplanation, exerciseAlternatives, exerciseClassification, exerciseId, exerciseLibraryDetail, getNextTemplate, type TemplateId, type WorkoutTemplate } from "@/lib/workouts";
 
 type Tab = "home" | "workout" | "history" | "progress" | "coach" | "settings";
 
@@ -77,6 +77,7 @@ export default function LeanApp() {
   }, []);
 
   const timerRemaining = useMemo(() => getTimerRemaining(timer, now), [timer, now]);
+  const exerciseTimerRemaining = useMemo(() => getExerciseTimerRemaining(activeWorkout?.exerciseTimer, now), [activeWorkout?.exerciseTimer, now]);
 
   useEffect(() => {
     if (!timer || !timer.running || timerRemaining > 0 || timer.notified) return;
@@ -85,6 +86,18 @@ export default function LeanApp() {
     putItem("timers", expired);
     notifyTimerDone(timer.exercise);
   }, [timer, timerRemaining]);
+
+  useEffect(() => {
+    const exerciseTimer = activeWorkout?.exerciseTimer;
+    if (!activeWorkout || !exerciseTimer || !exerciseTimer.running || exerciseTimerRemaining > 0 || exerciseTimer.finished) return;
+    const session = structuredClone(activeWorkout);
+    if (!session.exerciseTimer) return;
+    session.exerciseTimer.running = false;
+    session.exerciseTimer.pausedRemainingSeconds = 0;
+    session.exerciseTimer.finished = true;
+    persistActive(session);
+    notifyTimerDone(session.exercises[exerciseTimer.exerciseIndex]?.name ?? "Esercizio");
+  }, [activeWorkout, exerciseTimerRemaining]);
 
   useEffect(() => {
     if (!finishArmed) return;
@@ -182,6 +195,45 @@ export default function LeanApp() {
     if (set.completed) await startRestTimer(exercise.name, REST_SECONDS[EXERCISES[exercise.name].kind]);
   }
 
+  async function startTimedSet(exerciseIndex: number, setIndex: number) {
+    if (!activeWorkout) return;
+    const session = structuredClone(activeWorkout);
+    const targetDurationSeconds = session.exercises[exerciseIndex].targetDurationSeconds ?? EXERCISES[session.exercises[exerciseIndex].name]?.targetDurationSeconds ?? 30;
+    const current = session.exerciseTimer;
+    const currentTime = Date.now();
+    if (current?.exerciseIndex === exerciseIndex && current.setIndex === setIndex && !current.finished) {
+      const remaining = getExerciseTimerRemaining(current, currentTime);
+      session.exerciseTimer = current.running
+        ? { ...current, running: false, pausedRemainingSeconds: remaining }
+        : { ...current, running: true, startTime: currentTime, endTime: currentTime + Math.max(1, remaining) * 1000, pausedRemainingSeconds: remaining };
+    } else {
+      session.exerciseTimer = { exerciseIndex, setIndex, targetDurationSeconds, startTime: currentTime, endTime: currentTime + targetDurationSeconds * 1000, running: true, pausedRemainingSeconds: targetDurationSeconds, finished: false };
+    }
+    await persistActive(session);
+  }
+
+  async function stopTimedSet() {
+    if (!activeWorkout?.exerciseTimer) return;
+    const session = structuredClone(activeWorkout);
+    delete session.exerciseTimer;
+    await persistActive(session);
+  }
+
+  async function confirmTimedSet(exerciseIndex: number, setIndex: number) {
+    if (!activeWorkout?.exerciseTimer) return;
+    const session = structuredClone(activeWorkout);
+    const timerState = session.exerciseTimer;
+    if (!timerState || timerState.exerciseIndex !== exerciseIndex || timerState.setIndex !== setIndex || !timerState.finished) return;
+    const set = session.exercises[exerciseIndex].sets[setIndex];
+    set.actualDurationSeconds = timerState.targetDurationSeconds;
+    set.completed = true;
+    set.completedAt = new Date().toISOString();
+    delete session.exerciseTimer;
+    setFinishArmed(false);
+    await persistActive(session);
+    await startRestTimer(session.exercises[exerciseIndex].name, REST_SECONDS[EXERCISES[session.exercises[exerciseIndex].name].kind]);
+  }
+
   function updateSet(exerciseIndex: number, setIndex: number, field: "reps" | "weight", value: string) {
     if (!activeWorkout) return;
     const parsed = parseLocaleNumber(value);
@@ -213,6 +265,7 @@ export default function LeanApp() {
       ...current,
       name: alternativeName,
       exerciseId: exerciseId(alternativeName),
+      supersetGroup: definition.allocation?.supersetCompatible ? current.supersetGroup : undefined,
       plannedReps,
       plannedWeight,
       sets: Array.from({ length: current.plannedSets }, (_, index) => ({
@@ -236,6 +289,24 @@ export default function LeanApp() {
     setTemplates(nextTemplates);
     await persistActive(session);
     await Promise.all(nextTemplates.filter((template) => template.id === session.templateId).map((template) => putItem("templates", template)));
+  }
+
+  async function useTemplateAlternative(exerciseIndex: number, alternativeName: string) {
+    if (!selectedTemplate || !EXERCISES[alternativeName]) return;
+    const currentExercise = selectedTemplate.exercises[exerciseIndex];
+    const definition = EXERCISES[alternativeName];
+    const nextTemplates = templates.map((template) => template.id !== selectedTemplate.id ? template : {
+      ...template,
+      updatedAt: new Date().toISOString(),
+      exercises: template.exercises.map((exercise, index) => index !== exerciseIndex ? exercise : {
+        ...exercise, name: alternativeName, defaultWeight: definition.defaultWeight, defaultReps: definition.defaultReps,
+        priority: definition.priority, supersetGroup: definition.allocation?.supersetCompatible ? exercise.supersetGroup : undefined
+      })
+    });
+    setTemplates(nextTemplates);
+    const updated = nextTemplates.find((template) => template.id === selectedTemplate.id);
+    if (updated) await putItem("templates", updated);
+    if (currentExercise.name !== alternativeName) setProgramMigrationMessage("Alternativa salvata nel template. Lo storico dell'esercizio originale resta separato.");
   }
 
   async function persistTemplateWeights(session: WorkoutSession) {
@@ -367,7 +438,7 @@ export default function LeanApp() {
 
       <div className={`flex-1 px-5 pt-5 ${activeWorkout && timer ? "pb-64" : "pb-40"}`}>
         {tab === "home" && <HomeScreen activeWorkout={activeWorkout} nextTemplate={nextTemplate} stats={stats} goals={goals} settings={settings} expressMinutes={expressMinutes} setExpressMinutes={setExpressMinutes} needsBackup={needsBackup} daysAway={daysAway} onStart={() => startWorkout(nextTemplate)} onResume={() => setTab("workout")} onChooseWorkout={() => setTab("workout")} onBackup={downloadBackup} onLater={() => updateSettings({ ...settings, backupReminderDismissed: true })} />}
-        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={() => startWorkout(selectedTemplate)} onRecovery={setRecovery} onCompleteSet={completeSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onAlternative={useAlternative} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
+        {tab === "workout" && <WorkoutScreen activeWorkout={activeWorkout} history={history} templates={templates} selectedTemplate={selectedTemplate} selectedTemplateId={selectedTemplateId} expressMinutes={expressMinutes} progress={progress} finishArmed={finishArmed} notificationPermission={notificationPermission} exerciseTimerRemaining={exerciseTimerRemaining} onSelectTemplate={setSelectedTemplateId} onExpress={setExpressMinutes} onStart={() => startWorkout(selectedTemplate)} onRecovery={setRecovery} onCompleteSet={completeSet} onTimedSet={startTimedSet} onStopTimedSet={stopTimedSet} onConfirmTimedSet={confirmTimedSet} onSetChange={updateSet} onSetBlur={persistSetEdits} onFeedback={setFeedback} onAlternative={useAlternative} onTemplateAlternative={useTemplateAlternative} onFinish={requestFinishWorkout} onDiscard={() => persistActive(null)} onEnableNotifications={enableNotifications} />}
         {tab === "history" && <HistoryScreen history={history} onReopen={reopenWorkout} />}
         {tab === "progress" && <ProgressScreen history={history} records={records} stats={stats} />}
         {tab === "coach" && <CoachScreen history={history} goals={goals} progressions={progressions} daysAway={daysAway} />}
@@ -433,13 +504,13 @@ function HomeScreen({ activeWorkout, nextTemplate, stats, goals, settings, expre
 }
 
 function WorkoutScreen(props: any) {
-  const { activeWorkout, history, templates, selectedTemplate, selectedTemplateId, expressMinutes, progress, finishArmed, notificationPermission, onSelectTemplate, onExpress, onStart, onRecovery, onCompleteSet, onSetChange, onSetBlur, onFeedback, onAlternative, onFinish, onDiscard, onEnableNotifications } = props;
+  const { activeWorkout, history, templates, selectedTemplate, selectedTemplateId, expressMinutes, progress, finishArmed, notificationPermission, exerciseTimerRemaining, onSelectTemplate, onExpress, onStart, onRecovery, onCompleteSet, onTimedSet, onStopTimedSet, onConfirmTimedSet, onSetChange, onSetBlur, onFeedback, onAlternative, onTemplateAlternative, onFinish, onDiscard, onEnableNotifications } = props;
   return (
     <section className="space-y-5">
       {!activeWorkout && (
         <>
           <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">{templates.map((template: WorkoutTemplate) => <button key={template.id} className={`min-h-12 min-w-24 rounded-xl border px-4 text-sm font-black ${selectedTemplateId === template.id ? "border-white bg-white text-ink" : "border-white/10 bg-white/[0.06]"}`} onClick={() => onSelectTemplate(template.id)}>{template.name}</button>)}</div>
-          <Panel><p className="text-sm text-white/55">Missione</p><h2 className="mt-1 text-2xl font-black">{selectedTemplate.mission}</h2><div className="mt-4"><Segmented values={[30, 45, 60, 90]} value={expressMinutes} onChange={onExpress} /></div><button className="mt-4 min-h-14 w-full rounded-xl bg-white font-black text-ink" onClick={onStart}>Inizia allenamento</button></Panel>
+          <Panel><p className="text-sm text-white/55">Missione</p><h2 className="mt-1 text-2xl font-black">{selectedTemplate.mission}</h2><div className="mt-4"><Segmented values={[30, 45, 60, 90]} value={expressMinutes} onChange={onExpress} /></div><div className="mt-4 space-y-2">{selectedTemplate.exercises.map((exercise: any, index: number) => { const alternatives = exerciseAlternatives(exercise.name); return <div key={`${exercise.name}-${index}`} className="rounded-xl bg-white/[0.05] p-3"><p className="font-bold">{exercise.name} <span className="text-xs text-accent">{exerciseClassification(exercise.name)}</span></p><p className="mt-1 text-xs text-white/45">{exercise.defaultSets} serie · {EXERCISES[exercise.name]?.repRange}</p>{alternatives.length > 0 && <select className="mt-2 min-h-9 max-w-full rounded-lg border border-white/10 bg-ink px-2 text-xs font-bold" defaultValue="" onChange={(event) => { if (event.target.value) onTemplateAlternative(index, event.target.value); }}><option value="">Sostituisci nel programma</option>{alternatives.map((alternative) => <option key={alternative.exerciseId} value={alternative.name}>{alternative.name} · {alternative.relationship === "equivalent" ? "equivalente" : "stimolo diverso"}</option>)}</select>}</div>; })}</div><button className="mt-4 min-h-14 w-full rounded-xl bg-white font-black text-ink" onClick={onStart}>Inizia allenamento</button></Panel>
         </>
       )}
 
@@ -466,6 +537,8 @@ function WorkoutScreen(props: any) {
 
           {activeWorkout.exercises.map((exercise: WorkoutSession["exercises"][number], exerciseIndex: number) => {
             const definition = EXERCISES[exercise.name];
+            const classification = exerciseClassification(exercise.name);
+            const library = exerciseLibraryDetail(exercise.name);
             const previous = previousExerciseValues(history, exercise.name);
             const suggestedWeight = activeWorkout.returnFromBreak ? undefined : suggestedWeightForExercise(history, exercise.name);
             const decision = progressionForExercise(history, exercise, activeWorkout.recovery, activeWorkout.returnFromBreak);
@@ -474,10 +547,10 @@ function WorkoutScreen(props: any) {
             return (
               <Panel key={exercise.name}>
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div><h3 className="text-xl font-black">{exercise.name}</h3><p className="mt-1 text-sm text-white/50">{exercise.plannedSets} serie · {definition.repRange} reps · tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{supersetPartner && <p className="mt-2 text-xs font-black text-accent">SUPERSET {exercise.supersetGroup} · poi {supersetPartner.name}, riposa e ripeti</p>}{alternatives.length > 0 && <select className="mt-2 min-h-9 max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 text-xs font-bold text-white" defaultValue="" onChange={(event) => { if (event.target.value) onAlternative(exerciseIndex, event.target.value); }}><option value="">Usa un'alternativa oggi</option>{alternatives.map((alternative) => <option key={alternative} value={alternative}>{alternative}</option>)}</select>}{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight && <p className="mt-1 text-xs font-black text-accent">Puoi considerare: {formatNumber(suggestedWeight)}kg</p>}</div>
+                  <div><h3 className="text-xl font-black">{exercise.name}</h3><div className="mt-2 flex flex-wrap gap-2"><Chip>{classification}</Chip><span className="pt-1 text-xs text-white/45">{classificationExplanation(classification)}</span></div><p className="mt-2 text-sm text-white/50">{exercise.plannedSets} serie · {definition.repRange}{definition.measurementType === "duration" ? ` · ${exercise.targetDurationSeconds ?? definition.targetDurationSeconds}s` : " reps"} · tempo {definition.tempo ?? "naturale"}{definition.holdSeconds ? ` · tenuta ${definition.holdSeconds}s` : ""}</p>{supersetPartner && <p className="mt-2 text-xs font-black text-accent">SUPERSET {exercise.supersetGroup} · poi {supersetPartner.name}, riposa e ripeti</p>}<ExerciseDetail library={library} alternatives={alternatives} />{alternatives.length > 0 && <select className="mt-3 min-h-9 max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 text-xs font-bold text-white" defaultValue="" onChange={(event) => { if (event.target.value) onAlternative(exerciseIndex, event.target.value); }}><option value="">Sostituisci per oggi</option>{alternatives.map((alternative) => <option key={alternative.exerciseId} value={alternative.name}>{alternative.name} · {alternative.relationship === "equivalent" ? "equivalente" : "stimolo diverso"}</option>)}</select>}{previous.length > 0 && <p className="mt-2 text-xs font-bold text-white/45">Ultima volta: {previous.map((set) => definition.measurementType === "duration" ? `${set.actualDurationSeconds ?? 0}s` : `${formatNumber(set.weight)}kg × ${set.reps}`).join(" · ")}</p>}<p className="mt-2 text-xs font-black text-accent">{stateLabel(decision.state)} · {decision.label}</p><p className="mt-1 text-xs text-white/50">{decision.doThis}</p>{suggestedWeight !== undefined && <p className="mt-1 text-xs font-black text-accent">{definition.loadDirection === "assistance" ? "Riduci assistenza a" : "Puoi considerare:"} {formatNumber(suggestedWeight)}kg</p>}</div>
                   <Chip>{stateLabel(decision.state)}</Chip>
                 </div>
-                <div className="space-y-2">{exercise.sets.map((set, setIndex) => <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField decimals label="kg" value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
+                <div className="space-y-2">{exercise.sets.map((set, setIndex) => definition.measurementType === "duration" ? <TimedSetRow key={setIndex} index={setIndex} set={set} timer={activeWorkout.exerciseTimer} remaining={exerciseTimerRemaining} target={exercise.targetDurationSeconds ?? definition.targetDurationSeconds ?? 30} onToggle={() => onTimedSet(exerciseIndex, setIndex)} onStop={onStopTimedSet} onConfirm={() => onConfirmTimedSet(exerciseIndex, setIndex)} /> : <div className="grid grid-cols-[2rem_1fr_1fr_4.4rem] items-center gap-2" key={setIndex}><span className="text-center text-sm font-bold text-white/40">{setIndex + 1}</span><NumberField decimals label={definition.loadDirection === "assistance" ? "kg assist." : "kg"} value={set.weight} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "weight", value)} onBlur={onSetBlur} /><NumberField label="reps" value={set.reps} onChange={(value: string) => onSetChange(exerciseIndex, setIndex, "reps", value)} onBlur={onSetBlur} /><button className={`min-h-12 rounded-xl text-sm font-black ${set.completed ? "bg-accent text-ink" : "bg-white/[0.08]"}`} onClick={() => onCompleteSet(exerciseIndex, setIndex)}>{set.completed ? "Fatta" : "Tap"}</button></div>)}</div>
                 <Feedback exercise={exercise} onFeedback={(field: "technique" | "rpe" | "notes", value: string | number) => onFeedback(exerciseIndex, field, value)} />
               </Panel>
             );
@@ -543,10 +616,35 @@ function Feedback({ exercise, onFeedback }: any) {
   return <div className="mt-4 space-y-3"><div><p className="mb-2 text-xs font-bold uppercase text-white/40">Tecnica</p><div className="grid grid-cols-4 gap-1">{ratings.map((rating) => <button key={rating} className={`min-h-10 rounded-lg text-xs font-bold ${exercise.feedback.technique === rating ? "bg-accent text-ink" : "bg-white/[0.07]"}`} onClick={() => onFeedback("technique", rating)}>{rating}</button>)}</div></div><Scale label="Difficoltà" value={exercise.feedback.rpe ?? 7} max={10} onChange={(value: number) => onFeedback("rpe", value)} /></div>;
 }
 
+function ExerciseDetail({ library, alternatives }: { library: ReturnType<typeof exerciseLibraryDetail>; alternatives: ReturnType<typeof exerciseAlternatives> }) {
+  const [open, setOpen] = useState(false);
+  return <div className="mt-3">
+    <button className="text-xs font-black text-accent" onClick={() => setOpen(!open)}>{open ? "Nascondi guida" : "Guida tecnica"}</button>
+    {open && <div className="mt-2 space-y-3 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-xs text-white/65">
+      <div className="flex min-h-24 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/20 text-center text-white/40">Foto e video verificati non disponibili offline per questo esercizio.</div>
+      <p><span className="font-black text-white">Posizione iniziale: </span>{library.startingPosition}</p>
+      <GuideList title="Movimento" items={library.instructions} />
+      <GuideList title="Errori comuni" items={library.commonMistakes} />
+      <GuideList title="Sicurezza" items={library.safety} />
+      {alternatives.length > 0 && <div><p className="font-black text-white">Alternative</p><div className="mt-2 space-y-2">{alternatives.map((alternative) => <div key={alternative.exerciseId} className="rounded-lg bg-white/[0.05] p-2"><p className="font-bold text-white">{alternative.name} · {alternative.classification}</p><p className="mt-1">{alternative.primaryMuscle}; {alternative.repRange}; {alternative.equipment}; difficoltà {alternative.technicalDifficulty}.</p><p className="mt-1 text-white/50">{alternative.relationship === "equivalent" ? "Equivalente: " : "Stimolo diverso: "}{alternative.difference}</p></div>)}</div></div>}
+    </div>}
+  </div>;
+}
+
+function GuideList({ title, items }: { title: string; items: string[] }) {
+  return <div><p className="font-black text-white">{title}</p><p className="mt-1">{items.join(" · ")}</p></div>;
+}
+
+function TimedSetRow({ index, set, timer, remaining, target, onToggle, onStop, onConfirm }: any) {
+  const timerForSet = timer?.setIndex === index ? timer : undefined;
+  if (set.completed) return <div className="grid grid-cols-[2rem_1fr_4.4rem] items-center gap-2"><span className="text-center text-sm font-bold text-white/40">{index + 1}</span><p className="rounded-xl bg-white/[0.06] px-3 py-3 text-center text-sm font-black">{set.actualDurationSeconds ?? target}s</p><span className="rounded-xl bg-accent py-3 text-center text-sm font-black text-ink">Fatta</span></div>;
+  return <div className="rounded-xl bg-white/[0.04] p-2"><div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-white/40">{index + 1}</span><p className="text-lg font-black tabular-nums">{timerForSet ? `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}` : `${target}s`}</p>{timerForSet?.finished ? <button className="min-h-10 rounded-xl bg-accent px-3 text-sm font-black text-ink" onClick={onConfirm}>Conferma</button> : <button className="min-h-10 rounded-xl bg-white/[0.08] px-3 text-sm font-black" onClick={onToggle}>{timerForSet?.running ? "Pausa" : timerForSet ? "Riprendi" : "Avvia"}</button>}</div>{timerForSet && !timerForSet.finished && <button className="mt-2 w-full text-xs font-bold text-white/45" onClick={onStop}>Stop timer</button>}{timerForSet?.finished && <p className="mt-2 text-center text-xs font-black text-accent">Tempo completato: conferma per avviare il recupero.</p>}</div>;
+}
+
 function FixedTimerBadge({ timer, remaining, onToggle, onAdjust, onClose }: any) {
   return (
     <div className="fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md px-3">
-      <div className="rounded-2xl border border-accent/35 bg-[#07141a]/95 p-3 shadow-[0_0_34px_rgba(0,217,255,0.18)] backdrop-blur-xl">
+      <div className="rounded-2xl border border-accent/35 bg-[#07141a]/95 p-3 shadow-[0_0_34px_rgba(184,255,0,0.18)] backdrop-blur-xl">
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase text-accent">Timer recupero</p>
@@ -620,6 +718,7 @@ function Loading() { return <main className="flex min-h-screen items-center just
 function MiniChart({ points }: { points: number[] }) { const max = Math.max(...points, 1); return <div className="mt-4 flex h-28 items-end gap-2 rounded-xl bg-white/[0.04] p-3">{points.map((point, index) => <div key={index} className="flex-1 rounded-t bg-accent" style={{ height: `${Math.max(8, (point / max) * 100)}%` }} />)}</div>; }
 
 function getTimerRemaining(timer: RestTimer | null, currentTime: number) { if (!timer) return 0; return timer.running ? Math.max(0, Math.ceil((timer.endTime - currentTime) / 1000)) : Math.max(0, timer.pausedRemainingSeconds); }
+function getExerciseTimerRemaining(timer: TimedExerciseTimer | undefined, currentTime: number) { if (!timer) return 0; return timer.running ? Math.max(0, Math.ceil((timer.endTime - currentTime) / 1000)) : Math.max(0, timer.pausedRemainingSeconds); }
 function formatDate(input: string) { return dateFormat.format(new Date(input)); }
 function formatDuration(seconds: number) { const minutes = Math.round(seconds / 60); return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`; }
 function formatVolume(volume: number) { return volume >= 1000 ? `${formatNumber(volume / 1000)}k kg` : `${formatNumber(volume)} kg`; }
