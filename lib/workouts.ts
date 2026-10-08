@@ -2,6 +2,7 @@ export type ExerciseKind = "compound" | "machine" | "isolation" | "abs";
 export type MeasurementType = "reps" | "duration";
 export type ExerciseClassification = "Fondamentale" | "Complementare" | "Isolamento" | "Core / Stabilità";
 export type LoadDirection = "standard" | "assistance";
+export type EquipmentType = "Macchine" | "Manubri" | "Kettlebell" | "Elastici" | "Cavi" | "Corpo libero" | "Bilanciere";
 export type TemplateId = "day-a" | "day-b" | "day-c";
 export type Tempo = "3-0-1" | "4-1-1" | "2-1-2";
 export type ExerciseRole = "primary" | "secondary" | "accessory" | "core";
@@ -39,7 +40,7 @@ export type ExerciseDefinition = {
   loadDirection?: LoadDirection;
   primaryMuscle?: string;
   secondaryMuscles?: string[];
-  equipment?: string;
+  equipment?: EquipmentType[];
   technicalDifficulty?: "Base" | "Intermedia" | "Avanzata";
 };
 
@@ -52,7 +53,7 @@ export type ExerciseAlternative = {
   classification: ExerciseClassification;
   suggestedSets: number;
   repRange: string;
-  equipment: string;
+  equipment: EquipmentType[];
   technicalDifficulty: "Base" | "Intermedia" | "Avanzata";
   difference: string;
   relationship: "equivalent" | "different-stimulus";
@@ -140,20 +141,23 @@ export const EXERCISES: Record<string, ExerciseDefinition> = {
   "Hollow Hold": { name: "Hollow Hold", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 0, repTarget: 0, repRange: "15-30 sec", defaultWeight: 0, increment: 0, measurementType: "duration", targetDurationSeconds: 20, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-extension", minSets: 1, supersetCompatible: true } },
   "Dead Bug": { name: "Dead Bug", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "8-12/lato", defaultWeight: 0, increment: 0, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "anti-extension", minSets: 1, supersetCompatible: true } },
   "Bird Dog": { name: "Bird Dog", kind: "abs", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "8-12/lato", defaultWeight: 0, increment: 0, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "anti-rotation", minSets: 1, supersetCompatible: true } },
-  "Pallof Press": { name: "Pallof Press", kind: "isolation", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "10-12/lato", defaultWeight: 5, increment: 1.25, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-rotation", minSets: 1, supersetCompatible: true } }
+  "Pallof Press": { name: "Pallof Press", kind: "isolation", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "10-12/lato", defaultWeight: 5, increment: 1.25, defaultSide: "both", allocation: { role: "core", fatigueCost: "low", technicalDemand: "medium", movementPattern: "anti-rotation", minSets: 1, supersetCompatible: true } },
+  "Band Pallof Press": { name: "Band Pallof Press", kind: "isolation", focus: "core", priority: "medium", defaultSets: 2, defaultReps: 10, repTarget: 12, repRange: "10-12/lato", defaultWeight: 0, increment: 0, defaultSide: "both", equipment: ["Elastici"], allocation: { role: "core", fatigueCost: "low", technicalDemand: "low", movementPattern: "anti-rotation", minSets: 1, supersetCompatible: true } },
+  "Kettlebell Romanian Deadlift": { name: "Kettlebell Romanian Deadlift", kind: "compound", focus: "legs", priority: "medium", defaultSets: 2, defaultReps: 8, repTarget: 10, repRange: "6-10", defaultWeight: 16, increment: 2, equipment: ["Kettlebell"], tempo: "3-0-1", allocation: { role: "secondary", fatigueCost: "medium", technicalDemand: "medium", movementPattern: "hip-hinge", minSets: 1 } },
+  "Band Pull Apart": { name: "Band Pull Apart", kind: "isolation", focus: "shoulders", priority: "low", defaultSets: 2, defaultReps: 12, repTarget: 15, repRange: "12-15", defaultWeight: 0, increment: 0, equipment: ["Elastici"], tempo: "2-1-2", allocation: { role: "accessory", fatigueCost: "low", technicalDemand: "low", movementPattern: "horizontal-abduction", minSets: 1, supersetCompatible: true } }
 };
 
 const ALTERNATIVES: Record<string, Array<{ name: string; relationship: ExerciseAlternative["relationship"]; difference: string }>> = {
-  "Leg Press": [{ name: "Hack Squat", relationship: "equivalent", difference: "Stesso pattern dominante di ginocchio, con una traiettoria più vincolata." }],
-  "Hack Squat": [{ name: "Leg Press", relationship: "equivalent", difference: "Stesso focus su quadricipiti, con schienale e angolo diversi." }],
+  "Leg Press": [{ name: "Hack Squat", relationship: "equivalent", difference: "Stesso pattern dominante di ginocchio, con una traiettoria più vincolata." }, { name: "Romanian Deadlift", relationship: "different-stimulus", difference: "Mette il focus sull'estensione d'anca e sui femorali: è complementare, non equivalente." }],
+  "Hack Squat": [{ name: "Leg Press", relationship: "equivalent", difference: "Stesso focus su quadricipiti, con schienale e angolo diversi." }, { name: "Romanian Deadlift", relationship: "different-stimulus", difference: "Lavora l'anca e la catena posteriore, non sostituisce il pattern di squat." }],
   "Calf Raises": [{ name: "Standing Calf Raise", relationship: "equivalent", difference: "Stessa estensione di caviglia, con carico in piedi." }],
   "Standing Calf Raise": [{ name: "Calf Raises", relationship: "equivalent", difference: "Stesso gesto, in versione più stabile." }],
   "Chest Press": [{ name: "Dumbbell Chest Press", relationship: "equivalent", difference: "Stessa spinta orizzontale, con più richiesta di stabilità." }],
   "Dumbbell Chest Press": [{ name: "Chest Press", relationship: "equivalent", difference: "Stessa spinta orizzontale, con traiettoria guidata." }],
-  "Lat Machine": [{ name: "Assisted Pull Ups", relationship: "equivalent", difference: "Stessa tirata verticale; l'assistenza si riduce per rendere il gesto più difficile." }],
-  "Assisted Pull Ups": [{ name: "Lat Machine", relationship: "equivalent", difference: "Stessa tirata verticale, più facilmente regolabile al cavo." }],
-  "Pulley Row": [{ name: "Chest Supported Row", relationship: "equivalent", difference: "Stessa tirata orizzontale, con meno richiesta lombare." }],
-  "Chest Supported Row": [{ name: "Pulley Row", relationship: "equivalent", difference: "Stessa tirata orizzontale, con maggiore libertà di assetto." }],
+  "Lat Machine": [{ name: "Assisted Pull Ups", relationship: "equivalent", difference: "Stessa tirata verticale; l'assistenza si riduce per rendere il gesto più difficile." }, { name: "Pulley Row", relationship: "different-stimulus", difference: "Tirata orizzontale per dorsali e parte media della schiena." }, { name: "Chest Supported Row", relationship: "different-stimulus", difference: "Tirata orizzontale con appoggio del torace e minore richiesta lombare." }],
+  "Assisted Pull Ups": [{ name: "Lat Machine", relationship: "equivalent", difference: "Stessa tirata verticale, più facilmente regolabile al cavo." }, { name: "Pulley Row", relationship: "different-stimulus", difference: "Tirata orizzontale: utile per la schiena, ma non identica alla trazione verticale." }, { name: "Chest Supported Row", relationship: "different-stimulus", difference: "Tirata orizzontale stabile, non equivalente alla trazione verticale." }],
+  "Pulley Row": [{ name: "Chest Supported Row", relationship: "equivalent", difference: "Stessa tirata orizzontale, con meno richiesta lombare." }, { name: "Lat Machine", relationship: "different-stimulus", difference: "Tirata verticale: cambia la traiettoria e il focus scapolare." }, { name: "Assisted Pull Ups", relationship: "different-stimulus", difference: "Tirata verticale con assistenza, non sostituisce la riga orizzontale." }],
+  "Chest Supported Row": [{ name: "Pulley Row", relationship: "equivalent", difference: "Stessa tirata orizzontale, con maggiore libertà di assetto." }, { name: "Lat Machine", relationship: "different-stimulus", difference: "Tirata verticale, utile ma non biomeccanicamente equivalente." }, { name: "Assisted Pull Ups", relationship: "different-stimulus", difference: "Tirata verticale con assistenza, utile ma con pattern differente." }],
   "Shoulder Press": [{ name: "Dumbbell Shoulder Press", relationship: "equivalent", difference: "Stessa spinta verticale, con più stabilità richiesta ai manubri." }],
   "Dumbbell Shoulder Press": [{ name: "Shoulder Press", relationship: "equivalent", difference: "Stessa spinta verticale, con macchina più stabile." }],
   "Lateral Raises": [{ name: "Cable Lateral Raise", relationship: "equivalent", difference: "Stesso isolamento del deltoide laterale, con tensione più costante." }, { name: "Face Pull", relationship: "different-stimulus", difference: "Lavora soprattutto deltoidi posteriori e controllo scapolare, non sostituisce completamente l'alzata laterale." }],
@@ -166,10 +170,13 @@ const ALTERNATIVES: Record<string, Array<{ name: string; relationship: ExerciseA
   "Seated Leg Curl": [{ name: "Leg Curl", relationship: "equivalent", difference: "Stesso lavoro sui femorali, con assetto diverso." }],
   "Dumbbell Curl": [{ name: "Cable Curl", relationship: "equivalent", difference: "Stessa flessione di gomito, con tensione più costante." }, { name: "Hammer Curl", relationship: "different-stimulus", difference: "Maggiore enfasi su brachiale e presa neutra." }],
   "Cable Curl": [{ name: "Dumbbell Curl", relationship: "equivalent", difference: "Stessa flessione di gomito, con carico libero." }],
-  "Face Pull": [{ name: "Rear Delt Cable Fly", relationship: "equivalent", difference: "Stesso focus posteriore della spalla, con meno rotazione esterna." }, { name: "Cable Lateral Raise", relationship: "different-stimulus", difference: "Focus sul deltoide laterale: non è una sostituzione equivalente." }],
+  "Face Pull": [{ name: "Rear Delt Cable Fly", relationship: "equivalent", difference: "Stesso focus posteriore della spalla, con meno rotazione esterna." }, { name: "Band Pull Apart", relationship: "different-stimulus", difference: "Opzione più semplice con elastico per deltoidi posteriori e scapole." }, { name: "Cable Lateral Raise", relationship: "different-stimulus", difference: "Focus sul deltoide laterale: non è una sostituzione equivalente." }],
   "Rear Delt Cable Fly": [{ name: "Face Pull", relationship: "equivalent", difference: "Stesso focus posteriore, con più rotazione esterna e controllo scapolare." }],
   "Hammer Curl": [{ name: "Rope Hammer Curl", relationship: "equivalent", difference: "Stesso pattern a presa neutra, al cavo." }, { name: "Dumbbell Curl", relationship: "different-stimulus", difference: "Più enfasi sul bicipite in supinazione." }],
-  "Rope Hammer Curl": [{ name: "Hammer Curl", relationship: "equivalent", difference: "Stesso pattern a presa neutra, con manubri." }]
+  "Rope Hammer Curl": [{ name: "Hammer Curl", relationship: "equivalent", difference: "Stesso pattern a presa neutra, con manubri." }],
+  "Romanian Deadlift": [{ name: "Kettlebell Romanian Deadlift", relationship: "equivalent", difference: "Stesso hip hinge, con richiesta tecnica e carico più gestibili." }, { name: "Leg Curl", relationship: "different-stimulus", difference: "Lavora i femorali con flessione del ginocchio: non sostituisce il pattern d'anca." }],
+  "Pallof Press": [{ name: "Band Pallof Press", relationship: "equivalent", difference: "Stesso anti-rotazione, usando un elastico invece del cavo." }],
+  "Band Pallof Press": [{ name: "Pallof Press", relationship: "equivalent", difference: "Stesso anti-rotazione, con progressione più precisa al cavo." }]
 };
 
 const MUSCLES: Record<ExerciseDefinition["focus"], { primary: string; secondary: string[] }> = {
@@ -219,16 +226,33 @@ function alternativeDetail(option: { name: string; relationship: ExerciseAlterna
 export function exerciseLibraryDetail(name: string): ExerciseLibraryDetail {
   const definition = EXERCISES[name];
   const timed = definition?.measurementType === "duration";
+  const media = exerciseMedia(name);
   return {
     startingPosition: timed ? "Sistema colonna e bacino neutri; respira senza perdere tensione." : "Regola seduta e carico, poi trova un assetto stabile prima della prima ripetizione.",
     instructions: timed ? ["Avvia il timer solo quando l'assetto è stabile.", "Mantieni respiro regolare e tensione continua.", "Interrompi se perdi posizione o senti dolore."] : ["Muovi il carico con controllo nel ROM che riesci a gestire.", "Mantieni il ritmo previsto senza slanci.", "Fermati prima che la tecnica cambi."],
     commonMistakes: timed ? ["Trattenere il respiro", "Compensare con la schiena", "Prolungare la tenuta perdendo controllo"] : ["Usare slancio", "Accorciare il ROM", "Aumentare il carico prima di controllarlo"],
-    safety: ["Nessun dolore articolare acuto.", "Regola macchina e appoggi prima della serie.", "Riduci carico o interrompi se l'esecuzione peggiora." ]
+    safety: ["Nessun dolore articolare acuto.", "Regola macchina e appoggi prima della serie.", "Riduci carico o interrompi se l'esecuzione peggiora." ],
+    media
   };
 }
 
-function equipmentFor(definition: ExerciseDefinition) { return definition.kind === "compound" ? "Macchina o pesi liberi" : definition.kind === "abs" ? "Corpo libero o macchina" : "Macchina, cavo o manubri"; }
+function equipmentFor(definition: ExerciseDefinition): EquipmentType[] {
+  if (definition.measurementType === "duration" || ["Dead Bug", "Bird Dog"].includes(definition.name)) return ["Corpo libero"];
+  if (definition.name.includes("Dumbbell")) return ["Manubri"];
+  if (definition.name.includes("Cable") || definition.name.includes("Pulley") || definition.name.includes("Face Pull") || definition.name.includes("Pushdown") || definition.name.includes("Rope")) return ["Cavi"];
+  if (definition.name.includes("Romanian")) return ["Bilanciere", "Manubri"];
+  if (definition.kind === "machine" || definition.kind === "compound") return ["Macchine"];
+  return definition.kind === "abs" ? ["Macchine", "Corpo libero"] : ["Manubri"];
+}
 function difficultyFor(definition: ExerciseDefinition): "Base" | "Intermedia" | "Avanzata" { return definition.allocation?.technicalDemand === "high" ? "Avanzata" : definition.allocation?.technicalDemand === "medium" ? "Intermedia" : "Base"; }
+
+function exerciseMedia(name: string): ExerciseLibraryDetail["media"] {
+  const commons = "https://commons.wikimedia.org/wiki/";
+  if (name === "Leg Press") return { imageSrc: `${commons}Special:FilePath/Leg-press-2-1024x670.png?width=960`, attribution: "Everkinetic · CC BY-SA 3.0", videoUrl: `${commons}Category:Leg_press_machines` };
+  if (name === "Plank") return { imageSrc: `${commons}Special:FilePath/Personal_training_plank_exercise_instruction.jpg?width=960`, attribution: "PTPioneer / Tyler Read · CC BY 2.0" };
+  if (name === "Side Plank") return { imageSrc: `${commons}Special:FilePath/Modifiedsideplank.jpg?width=960`, attribution: "U.S. Army · pubblico dominio USA / CC BY 2.0" };
+  return undefined;
+}
 
 const TEMPLATE_DATA: Record<TemplateId, { name: WorkoutTemplate["name"]; mission: string; weeklyFocus: string; exercises: TemplateBlueprintExercise[] }> = {
   "day-a": {
