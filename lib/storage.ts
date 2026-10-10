@@ -120,6 +120,7 @@ export async function seedAppData() {
 
   const templates = await getAll<WorkoutTemplate>("templates");
   if (templates.length === 0) await Promise.all(createDefaultTemplates().map((template) => putItem("templates", template)));
+  await repairDuplicatedTemplates();
 
   if (!(await getItem<ActiveWorkoutRecord>("appState", "activeWorkout"))) {
     await putItem<ActiveWorkoutRecord>("appState", { id: "activeWorkout", session: null });
@@ -130,6 +131,33 @@ export async function seedAppData() {
   if (!(await getItem<CoachData>("coach", "coach"))) {
     await putItem<CoachData>("coach", { id: "coach", weeklyGoals: ["Muoviti bene", "Registra la tecnica", "La costanza vince"], updatedAt: new Date().toISOString() });
   }
+}
+
+async function repairDuplicatedTemplates() {
+  const templates = await getAll<WorkoutTemplate>("templates");
+  const referenceTemplates = createDefaultTemplates();
+  const corrupted = templates.filter((template) => {
+    const names = template.exercises.map((exercise) => exercise.name);
+    return new Set(names).size !== names.length;
+  });
+
+  if (!corrupted.length) return;
+
+  const repaired = corrupted.map((template) => {
+    const reference = referenceTemplates.find((candidate) => candidate.id === template.id);
+    if (!reference) return template;
+    const savedDefaults = new Map(template.exercises.map((exercise) => [exercise.name, exercise]));
+    return {
+      ...reference,
+      createdAt: template.createdAt,
+      exercises: reference.exercises.map((exercise) => {
+        const saved = savedDefaults.get(exercise.name);
+        return saved ? { ...exercise, defaultWeight: saved.defaultWeight, defaultReps: saved.defaultReps } : exercise;
+      })
+    };
+  });
+
+  await Promise.all(repaired.map((template) => putItem("templates", template)));
 }
 
 async function migrateLegacyLean78Data() {
